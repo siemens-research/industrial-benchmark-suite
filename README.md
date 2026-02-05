@@ -1,1 +1,1 @@
-# Industrial Benchmark Suite
+# Industrial Benchmark Suite (IBS)
