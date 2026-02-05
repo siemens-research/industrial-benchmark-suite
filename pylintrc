@@ -1,0 +1,59 @@
+[MASTER]
+ignore-patterns=_prototyping
+
+[BASIC]
+# Good variable names which should always be accepted, separated by a comma.
+good-names=e,
+           f,
+           i,
+           j,
+           k,
+           x,
+           y,
+           z,
+           T,
+           Run,
+           _
+
+[DESIGN]
+# Maximum number of branch for function / method body.
+max-branches=24
+# Maximum number of arguments for function / method.
+max-args=10
+# Maximum number of locals for function / method body.
+max-locals=25
+# Maximum number of attributes for a class (see R0902).
+max-attributes=15
+# Maximum number of lines in a module.
+max-module-lines=1500
+
+
+[MESSAGES CONTROL]
+disable=W,
+        fixme,
+        # NOTE(mrksr): When implementing interfaces or overriding methods,
+        # arguments often go unused.
+        unused-argument,
+        # NOTE(mrksr): Ray's RLlib frequently uses mixins and an
+        # operator-class-pattern which implement a stateful functional. Both
+        # types of classes generally do not expose public methods.
+        too-few-public-methods,
+        # NOTE(mrksr): Ray often relies on accessing protected members in
+        # functions passed to builder objects
+        protected-access,
+        # NOTE(mrksr): Ray and keras use custom init logic
+        attribute-defined-outside-init,
+        # NOTE(mrksr): Ray does not implement all abstract methods by design
+        abstract-method,
+        # NOTE(mrksr): We do not really care about module docstrings
+        missing-module-docstring,
+        # NOTE(mrksr): Our docs contain duplicate code.
+        # See https://github.com/PyCQA/pylint/issues/214
+        duplicate-code,
+        invalid-name,
+
+[TYPECHECK]
+# NOTE(mrksr): Ignore tensorflow's lazy loading magic for import linting.
+ignored-modules=LazyLoader,tensorflow.keras
+# NOTE(mweber): Ignore type-checking in pandas TextfileReader
+ignored-classes=TextFileReader

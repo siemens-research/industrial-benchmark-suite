@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "Industrial Benchmark Suite"
+version = "0.0.0"
+description = "Collection of industrial benchmark environments."
+authors = [
+    "Marc Weber <marc-weber@siemens.com>",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+gymnasium = {version=">=0.26.1", extras=["classic-control"]}
+tensorflow = ">=2.0,< 2.16"
+#tensorflow-io-gcs-filesystem = {version = "^0.25.0", markers = "platform_machine != \"arm64\" or platform_system != \"Darwin\""}
+pandas = "*"
+matplotlib = "*"
+
+[tool.poetry.dev-dependencies]
+black = "*"
+isort = "*"
+mkdocs = "*"
+mkdocs-jupyter = "*"
+mkdocs-material = "*"
+mkdocstrings = "*"
+mkdocstrings-python-legacy = "*"
+pymdown-extensions = "*"
+pre-commit = "*"
+pygments = "*"
+pylint = "*"
+pytest = "*"
+pytest-cov = "*"
+pydocstyle = "*"
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
