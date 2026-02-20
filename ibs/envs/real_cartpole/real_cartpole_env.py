@@ -17,6 +17,8 @@ import gymnasium as gym
 import numpy as np
 import tensorflow as tf
 
+from ibs.common.utils import resolve_path
+
 CONFIG_MLP = {
     "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/mlp",
     "tf_model_names": [
@@ -50,17 +52,6 @@ CONFIG_LSTM = {
     "initial_observation": [325.0, 0.0, 3.1, 0.0],
     "max_episode_steps": 500,
 }
-
-
-def resolve_path(path: str, reference_script_location: str):
-    """Return composite path from given reference location and relative path."""
-    if Path(path).is_absolute():
-        return Path(path).resolve()
-
-    if Path(reference_script_location).is_dir():
-        return Path(Path(reference_script_location), path).resolve()
-
-    return Path(Path(reference_script_location).parent, path).resolve()
 
 
 class RealCartPoleEnv(gym.Env):
