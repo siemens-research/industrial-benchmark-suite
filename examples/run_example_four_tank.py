@@ -36,7 +36,7 @@ if __name__ == "__main__":
     t_start = time.time()
     step_count = 0
     while not terminated:
-        policy_input = np.hstack(list(env.model_input_buffer)[-buffer_size_policy:])
+        policy_input = np.hstack(list(env._model_input_buffer)[-buffer_size_policy:])
         action = policy_model([policy_input])[0]
         # action = np.array(5*[0.0], dtype=np.float32)  # for testing purpose only
         # action = env.action_space.sample()  # for testing purpose only

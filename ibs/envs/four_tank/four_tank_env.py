@@ -73,13 +73,13 @@ class FourTankEnv(gym.Env):
     The system is controlled by the following continuous (floating point) control actions.
     Each action corresponds to the setpoint of a valve opening level, which is applied at each step.
 
-    | Num | Action                                  | Min   | Max   |
-    |-----|-----------------------------------------|-------|-------|
-    | 0   | Setpoint Inlet Valve Tank 1             | 0.0   | 700.0 |
-    | 1   | Setpoint Inlet Valve Tank 2             | 0.0   | 700.0 |
-    | 2   | Setpoint Inlet Valve Tank 3             | 0.0   | 700.0 |
-    | 3   | Setpoint Connecting Valve Tank 1-2      | 0.0   | 100.0 |
-    | 4   | Setpoint Connecting Valve Tank 3-4      | 0.0   | 100.0 |
+    | Num | Action                     | Min   | Max   |
+    |-----|------------------------ ---|-------|-------|
+    | 0   | Control Valve 1            | 0.0   | 700.0 |
+    | 1   | Control Valve 2            | 0.0   | 700.0 |
+    | 2   | Control Valve 3            | 0.0   | 700.0 |
+    | 3   | Control Valve 1-2          | 0.0   | 100.0 |
+    | 4   | Control Valve 3-4          | 0.0   | 100.0 |
 
     ## Reward Function
 
@@ -99,12 +99,6 @@ class FourTankEnv(gym.Env):
     Depending on the config field 'max_episode_steps', the episode is either terminated when the
     maximum step limit is reached or is run infinitely (default).
     """
-
-    # Static class properties used by render() function
-    metadata = {
-        "render_modes": ["human"],
-        "render_fps": 50,
-    }
 
     obs_names = [
         "Inlet Valve Tank 1",
@@ -195,8 +189,7 @@ class FourTankEnv(gym.Env):
 
         self.action_space = gym.spaces.Box(self.action_limits[:, 0], self.action_limits[:, 1], dtype=np.float32)
 
-        self.observation_buffer = deque([], maxlen=self.config["observation_buffer_size"])
-        self.model_input_buffer = deque([], maxlen=self.config["observation_buffer_size"])
+        self._model_input_buffer = deque([], maxlen=self.config["observation_buffer_size"])
         self.current_objectives = []
 
         self.state = None
@@ -214,7 +207,7 @@ class FourTankEnv(gym.Env):
             observable state of the environment.
         """
         # Build flattened input vector from current state buffer to be used as model input
-        current_input_state = np.hstack(self.model_input_buffer)
+        current_input_state = np.hstack(self._model_input_buffer)
         action = np.array(action, dtype=np.float32)
 
         # Execute tf dynamic models using current state and provided action
@@ -254,7 +247,7 @@ class FourTankEnv(gym.Env):
             mean_next_state_from_models[self.obs_names.index(obj_var)] = self.current_objectives[i]
 
         # Update internal state representation applying mean over forecast model results
-        self.model_input_buffer.append(mean_next_state_from_models)
+        self._model_input_buffer.append(mean_next_state_from_models)
 
         self.state = mean_next_state_from_models
         reward = mean_reward_from_models
@@ -278,13 +271,11 @@ class FourTankEnv(gym.Env):
     def reset(self):
         initial_observation_vector = np.array(self.config["initial_observation"], dtype=np.float32)
 
-        self.observation_buffer.clear()
         for _ in range(self.observation_buffer_size):
-            self.observation_buffer.append(initial_observation_vector)
-            self.model_input_buffer.append(self.observation_buffer[-1])
+            self._model_input_buffer.append(initial_observation_vector)
 
         self.step_count = 0
-        self.state = self.observation_buffer[-1]
+        self.state = initial_observation_vector
         self.current_objectives = [self.state[self.obs_names.index(obj_var)] for obj_var in self.objective_names]
 
         return self.state, {}

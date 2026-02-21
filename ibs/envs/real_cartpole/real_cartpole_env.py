@@ -173,10 +173,7 @@ class RealCartPoleEnv(gym.Env):
 
         self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32)
 
-        self.observation_buffer = deque(
-            [], maxlen=self.config["observation_buffer_size"]
-        )
-        self.model_input_buffer = deque(
+        self._model_input_buffer = deque(
             [], maxlen=self.config["observation_buffer_size"]
         )
 
@@ -198,7 +195,7 @@ class RealCartPoleEnv(gym.Env):
             observable state of the environment.
         """
         # Build flattened input vector from current state buffer to be used as model input
-        current_input_state = np.hstack(self.model_input_buffer)
+        current_input_state = np.hstack(self._model_input_buffer)
         action = np.array(action)
 
         # Execute tf dynamic models using current state and provided action
@@ -238,11 +235,10 @@ class RealCartPoleEnv(gym.Env):
         mean_reward_from_models = np.mean(reward_by_model, axis=0)
 
         # Update internal state representation applying mean over forecast model results
-        self.model_input_buffer.append(mean_next_state_from_models)
+        self._model_input_buffer.append(mean_next_state_from_models)
 
-        self.state = self._model_output_vector_to_observation(
-            mean_next_state_from_models
-        )
+        self.state = self._model_output_vector_to_observation(mean_next_state_from_models)
+
         reward = self.compute_reward(self.state)
 
         self.step_count += 1
@@ -281,15 +277,13 @@ class RealCartPoleEnv(gym.Env):
         else:
             raise NotImplementedError("Unknown initialization method.")
 
-        self.observation_buffer.clear()
         for _ in range(self.observation_buffer_size):
-            self.observation_buffer.append(initial_observation_vector)
-            self.model_input_buffer.append(
-                self._observation_to_model_input_vector(self.observation_buffer[-1])
+            self._model_input_buffer.append(
+                self._observation_to_model_input_vector(initial_observation_vector)
             )
 
         self.step_count = 0
-        self.state = self.observation_buffer[-1]
+        self.state = initial_observation_vector
 
         return self.state, {}
 
