@@ -2,37 +2,13 @@
 
 ![real_cartpole_banner.PNG](docs/envs/real_cartpole/real_cartpole_banner.PNG)
 
-## Gym(nasium) Environment for the Cebit 2018 Hardware Cartpole
+## Gym(nasium) Environment for the Siemens Cebit 2018 Hardware Cartpole
 
 The environment provides a simulation of the Cebit 2018 cartpole system
 currently located at the Siemens Technology site in Munich/Neuperlach ("Real Cartpole")
 based on pre-trained dynamic models. It includes a realistic representation
 ("digital twin") of the actual physical system, including friction and solid body
 dynamics, amongst others.
-
-## Installation and Usage
-
-You can use `pip` as package manager to install all necessary dependencies from
-the code.siemens.com gitlab repository into a new or existing project (make sure that
-you have created and activated a python virtualenv before running the install command):
-
-```pip install cartpole-gym --index-url https://__token__:<your_personal_token>@code.siemens.com/api/v4/projects/385078/packages/pypi/simple```
-
-Note that you may need to insert your code.siemens.com credentials (user/token) to get
-access to the `learning-systems`package registry.
-
-After completion of the installation process, you can test the real cartpole environment by
-running some of the example scripts in the `/examples` or `/test` directories of this repo.
-There, you also find examples how to embed the benchmark environment in the context of training
-or evaluating RL agents.
-
-## Development
-
-In case you want to alter the sourec code or contribute to this project, it is recommended to
-use `poetry` as dependecy management framework. After checking out this repository (e.g. using
-`git clone`) simply install the project from your cmd line into a new python virtualenv space:
-
-```poetry install```
 
 ## Environment Description
 
