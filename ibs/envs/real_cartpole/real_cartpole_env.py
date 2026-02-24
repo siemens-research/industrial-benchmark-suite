@@ -28,8 +28,9 @@ CONFIG_MLP = {
         "model_4",
     ],
     "observation_buffer_size": 8,  # 8
-    "init_method": "fixed",  # "random"
-    "initial_observation": [325.0, 0.0, 3.1, 0.0],
+    "init_method": "from_data",  # "fixed"
+    "fixed_init_observation": [325.0, 0.0, 3.1, 0.0],
+    "init_data_file": "../../../resources/envs/real_cartpole/data_recordings/initial_observation_samples__2024-02-01_15-10-13__buffersize_8.csv",
     "max_episode_steps": 500,
 }
 
@@ -48,8 +49,9 @@ CONFIG_LSTM = {
         "model_10",
     ],
     "observation_buffer_size": 10,  # 8
-    "init_method": "fixed",  # "random"
-    "initial_observation": [325.0, 0.0, 3.1, 0.0],
+    "init_method": "from_data",  # "fixed"
+    "fixed_init_observation": [325.0, 0.0, 3.1, 0.0],
+    "init_data_file": "../../../resources/envs/real_cartpole/data_recordings/initial_observation_samples__2024-02-01_15-10-13__buffersize_10.csv",
     "max_episode_steps": 500,
 }
 
@@ -180,6 +182,17 @@ class RealCartPoleEnv(gym.Env):
         self.state = None
         self.max_episode_steps = self.config.get("max_episode_steps", None)
         self.step_count = 0
+        self.reset_count = 0
+
+        if self.config["init_method"] == "from_data":
+            assert resolve_path(
+                self.config["init_data_file"], __file__
+            ).exists(), "Initial observation samples file does not exist."
+            self.initial_observations = np.loadtxt(
+                resolve_path(self.config["init_data_file"], __file__),
+                delimiter=",",
+                dtype=np.float32,
+            )
 
         self.render_mode = self.config.get("render_mode", "human")
 
@@ -237,7 +250,9 @@ class RealCartPoleEnv(gym.Env):
         # Update internal state representation applying mean over forecast model results
         self._model_input_buffer.append(mean_next_state_from_models)
 
-        self.state = self._model_output_vector_to_observation(mean_next_state_from_models)
+        self.state = self._model_output_vector_to_observation(
+            mean_next_state_from_models
+        )
 
         reward = self.compute_reward(self.state)
 
@@ -265,25 +280,29 @@ class RealCartPoleEnv(gym.Env):
     def reset(self):
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(
-                self.config["initial_observation"], dtype=np.float32
+                self.config["fixed_init_observation"], dtype=np.float32
             )
-        elif self.config["init_method"] == "random":
-            initial_min_bounds = np.array([200.0, -10.0, -np.pi, -0.1])
-            initial_max_bounds = np.array([400.0, 10, np.pi, 0.1])
-            inital_space = gym.spaces.Box(
-                initial_min_bounds, initial_max_bounds, dtype=np.float32
+            for _ in range(self.observation_buffer_size):
+                self._model_input_buffer.append(
+                    self._observation_to_model_input_vector(initial_observation_vector)
+                )
+                self.state = initial_observation_vector
+        elif self.config["init_method"] == "from_data":
+            initial_model_inputs = self.initial_observations[
+                self.reset_count % len(self.initial_observations)
+            ]
+            initial_model_inputs_reshaped = initial_model_inputs.reshape(
+                -1, initial_model_inputs.shape[0] // self.observation_buffer_size
             )
-            initial_observation_vector = inital_space.sample()
+            self._model_input_buffer.extend(initial_model_inputs_reshaped)
+            self.state = self._model_output_vector_to_observation(
+                initial_model_inputs_reshaped[-1]
+            )
         else:
             raise NotImplementedError("Unknown initialization method.")
 
-        for _ in range(self.observation_buffer_size):
-            self._model_input_buffer.append(
-                self._observation_to_model_input_vector(initial_observation_vector)
-            )
-
         self.step_count = 0
-        self.state = initial_observation_vector
+        self.reset_count += 1
 
         return self.state, {}
 
