@@ -1,0 +1,61 @@
+"""Test functionality of real-cartpole benchmark."""
+
+import numpy as np
+
+from ibs.envs.distillation.distillation_env import DEFAULT_CONFIG, DistillationEnv
+
+MAX_EPISODE_STEPS = 10
+
+
+def test_env_fixed_init():
+    """Test functionality of env when applying random action, make sure return is below 0."""
+    config = {**DEFAULT_CONFIG}
+    config.update(
+        {
+            "max_episode_steps": MAX_EPISODE_STEPS,
+            "init_method": "fixed",
+        }
+    )
+    env = DistillationEnv(config)
+
+    observations, actions, rewards, infos = [], [], [], []
+    terminated = False
+    obs, _ = env.reset()
+    step_count = 0
+    while not terminated:
+        action = env.action_space.sample()  # for testing purpose only
+        obs, reward, terminated, _, info = env.step(action)
+        observations.append(obs)
+        actions.append(action)
+        rewards.append(reward)
+        infos.append(info)
+        step_count += 1
+
+    assert np.sum(rewards) < 0.0
+
+
+def test_env_from_data_init():
+    """Test functionality of env when applying random action, make sure return is below 0."""
+    config = {**DEFAULT_CONFIG}
+    config.update(
+        {
+            "max_episode_steps": MAX_EPISODE_STEPS,
+            "init_method": "from_data",
+        }
+    )
+    env = DistillationEnv(config)
+
+    observations, actions, rewards, infos = [], [], [], []
+    terminated = False
+    obs, _ = env.reset()
+    step_count = 0
+    while not terminated:
+        action = env.action_space.sample()  # for testing purpose only
+        obs, reward, terminated, _, info = env.step(action)
+        observations.append(obs)
+        actions.append(action)
+        rewards.append(reward)
+        infos.append(info)
+        step_count += 1
+
+    assert np.sum(rewards) < 0.0

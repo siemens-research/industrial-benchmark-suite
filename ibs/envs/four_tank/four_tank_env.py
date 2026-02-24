@@ -30,14 +30,15 @@ DEFAULT_CONFIG = {
         "model_4",
     ],
     "observation_buffer_size": 12,
-    "init_method": "fixed",  # "random"
-    "initial_observation": [500.0, 500.0, 500.0, 80.0, 80.0, 80.0, 15.0, 12.5, 9.3, 12.0, 10.0, 8.5],
+    "init_method": "from_data",  # "from_data", "fixed"
+    "init_data_file": "../../../resources/envs/four_tank/data_recordings/initial_observation_samples_2025-05-14__buffersize_12.csv",
+    "fixed_init_observation": [500.0, 500.0, 500.0, 80.0, 80.0, 80.0, 15.0, 12.5, 9.3, 12.0, 10.0, 8.5],
     "max_episode_steps": 100,
 }
 
 
 class FourTankEnv(gym.Env):
-    """Gym environment class of the modelled 4-tank process demonstrator.
+    """Gym environment class of the data-modeled 4-tank process demonstrator.
 
     ## Description
 
@@ -92,7 +93,7 @@ class FourTankEnv(gym.Env):
     ## Starting State
 
     Depending on the config field 'init_method', the starting state is either drawn as a 'random'
-    sample or set by a 'fixed' sample (as defined by the 'initial_observation' field).
+    sample or set by a 'fixed' sample (as defined by the 'fixed_init_observation' field).
 
     ## Episode End
 
@@ -195,6 +196,19 @@ class FourTankEnv(gym.Env):
         self.state = None
         self.max_episode_steps = self.config.get("max_episode_steps", None)
         self.step_count = 0
+        self.reset_count = 0
+
+        if self.config["init_method"] == "from_data":
+            assert resolve_path(
+                self.config["init_data_file"], __file__
+            ).exists(), "Initial observation samples file does not exist."
+            self.initial_observations = np.loadtxt(
+                resolve_path(self.config["init_data_file"], __file__),
+                delimiter=",",
+                dtype=np.float32,
+            )
+
+        self.render_mode = self.config.get("render_mode", "human")
 
     def step(self, action):
         """Iterate simulated DAL 4-tank benchmark process by one step using pre-trained dynamics model.
@@ -269,13 +283,30 @@ class FourTankEnv(gym.Env):
         )
 
     def reset(self):
-        initial_observation_vector = np.array(self.config["initial_observation"], dtype=np.float32)
-
-        for _ in range(self.observation_buffer_size):
-            self._model_input_buffer.append(initial_observation_vector)
+        if self.config["init_method"] == "fixed":
+            initial_observation_vector = np.array(
+                self.config["fixed_init_observation"], dtype=np.float32
+            )
+            for _ in range(self.observation_buffer_size):
+                self._model_input_buffer.append(
+                    initial_observation_vector
+                )
+            self.state = initial_observation_vector
+        elif self.config["init_method"] == "from_data":
+            initial_model_inputs = self.initial_observations[
+                self.reset_count % len(self.initial_observations)
+            ]
+            initial_model_inputs_reshaped = initial_model_inputs.reshape(
+                -1, initial_model_inputs.shape[0] // self.observation_buffer_size
+            )
+            self._model_input_buffer.extend(initial_model_inputs_reshaped)
+            self.state = initial_model_inputs_reshaped[-1]
+        else:
+            raise NotImplementedError("Unknown initialization method.")
 
         self.step_count = 0
-        self.state = initial_observation_vector
+        self.reset_count += 1
+
         self.current_objectives = [self.state[self.obs_names.index(obj_var)] for obj_var in self.objective_names]
 
         return self.state, {}
