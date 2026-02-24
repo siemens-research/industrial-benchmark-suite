@@ -286,7 +286,7 @@ class RealCartPoleEnv(gym.Env):
                 self._model_input_buffer.append(
                     self._observation_to_model_input_vector(initial_observation_vector)
                 )
-                self.state = initial_observation_vector
+            self.state = initial_observation_vector
         elif self.config["init_method"] == "from_data":
             initial_model_inputs = self.initial_observations[
                 self.reset_count % len(self.initial_observations)
