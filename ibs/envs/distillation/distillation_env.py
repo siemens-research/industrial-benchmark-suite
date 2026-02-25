@@ -38,7 +38,7 @@ DEFAULT_CONFIG = {
     "init_method": "from_data",  # "from_data", "fixed"
     "init_data_file": "../../../resources/envs/distillation/data_recordings/initial_observation_samples_2024-06-18__buffersize_20.csv",
     "fixed_init_observation": [0.2, 0.05, 0.3, 0.27, 0.73, 0.2, 0.1],
-    "max_episode_steps": 100,
+    "max_episode_length": 100,
 }
 
 
@@ -163,7 +163,7 @@ class DistillationEnv(gym.Env):
         self.current_objectives = []
 
         self.state = None
-        self.max_episode_steps = self.config.get("max_episode_steps", None)
+        self.max_episode_steps = self.config.get("max_episode_length", None)
         self.step_count = 0
         self.reset_count = 0
 
@@ -248,10 +248,10 @@ class DistillationEnv(gym.Env):
             reward,
             terminated,
             False,
-            {},
+            {"model_input_buffer": list(self._model_input_buffer)},
         )
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(
                 self.config["fixed_init_observation"], dtype=np.float32
@@ -278,7 +278,7 @@ class DistillationEnv(gym.Env):
 
         self.current_objectives = [self.state[self.obs_names.index(obj_var)] for obj_var in self.objective_names]
 
-        return self.state, {}
+        return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
     def update_objectives(self, new_objectives: dict):
         """Update the current objectives based on the provided new objectives."""
@@ -288,3 +288,12 @@ class DistillationEnv(gym.Env):
                 self.current_objectives[self.objective_names.index(obj_var)] = new_value
             else:
                 raise ValueError(f"Objective variable {obj_var} not found in state variables.")
+
+
+def create_distillation_env(**kwargs) -> DistillationEnv:
+    """Factory function to create real cartpole environment with specified config."""
+
+    config = {**DEFAULT_CONFIG}
+    config.update(kwargs)
+
+    return DistillationEnv(config)

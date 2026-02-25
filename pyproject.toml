@@ -6,6 +6,10 @@ authors = [
     "Marc Weber <marc-weber@siemens.com>",
 ]
 
+packages = [
+    { include = "ibs" }
+]
+
 [tool.poetry.dependencies]
 python = ">=3.10,<3.14"
 gymnasium = {version=">=0.26.1", extras=["classic-control"]}

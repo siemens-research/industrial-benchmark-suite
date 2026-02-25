@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
     "init_method": "from_data",  # "from_data", "fixed"
     "init_data_file": "../../../resources/envs/four_tank/data_recordings/initial_observation_samples_2025-05-14__buffersize_12.csv",
     "fixed_init_observation": [500.0, 500.0, 500.0, 80.0, 80.0, 80.0, 15.0, 12.5, 9.3, 12.0, 10.0, 8.5],
-    "max_episode_steps": 100,
+    "max_episode_length": 100,
 }
 
 
@@ -194,7 +194,7 @@ class FourTankEnv(gym.Env):
         self.current_objectives = []
 
         self.state = None
-        self.max_episode_steps = self.config.get("max_episode_steps", None)
+        self.max_episode_steps = self.config.get("max_episode_length", None)
         self.step_count = 0
         self.reset_count = 0
 
@@ -279,10 +279,10 @@ class FourTankEnv(gym.Env):
             reward,
             terminated,
             False,
-            {},
+            {"model_input_buffer": list(self._model_input_buffer)},
         )
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(
                 self.config["fixed_init_observation"], dtype=np.float32
@@ -309,7 +309,7 @@ class FourTankEnv(gym.Env):
 
         self.current_objectives = [self.state[self.obs_names.index(obj_var)] for obj_var in self.objective_names]
 
-        return self.state, {}
+        return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
     def update_objectives(self, new_objectives: dict):
         """Update the current objectives based on the provided new objectives."""
@@ -319,3 +319,12 @@ class FourTankEnv(gym.Env):
                 self.current_objectives[self.objective_names.index(obj_var)] = new_value
             else:
                 raise ValueError(f"Objective variable {obj_var} not found in state variables.")
+
+
+def create_four_tank_env(**kwargs) -> FourTankEnv:
+    """Factory function to create real cartpole environment with specified config."""
+
+    config = {**DEFAULT_CONFIG}
+    config.update(kwargs)
+
+    return FourTankEnv(config)

@@ -2,14 +2,14 @@
 
 import numpy as np
 
-from ibs.envs.real_cartpole.real_cartpole_env import CONFIG_MLP, RealCartPoleEnv
+from ibs.envs.real_cartpole.real_cartpole_env import DEFAULT_CONFIG_MLP, RealCartPoleEnv
 
 MAX_EPISODE_STEPS = 10
 
 
 def test_env_fixed_init():
     """Test functionality of env when applying constant action, make sure return is below 0."""
-    config = {**CONFIG_MLP}
+    config = {**DEFAULT_CONFIG_MLP}
     config.update(
         {
             "max_episode_steps": MAX_EPISODE_STEPS,
@@ -38,7 +38,7 @@ def test_env_fixed_init():
 
 def test_env_from_data_init():
     """Test functionality of env when applying constant action, make sure return is below 0."""
-    config = {**CONFIG_MLP}
+    config = {**DEFAULT_CONFIG_MLP}
     config.update(
         {
             "max_episode_steps": MAX_EPISODE_STEPS,
