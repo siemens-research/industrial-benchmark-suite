@@ -19,7 +19,7 @@ import tensorflow as tf
 
 from ibs.common.utils import resolve_path
 
-CONFIG_MLP = {
+DEFAULT_CONFIG_MLP = {
     "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/mlp",
     "tf_model_names": [
         "model_1",
@@ -31,10 +31,10 @@ CONFIG_MLP = {
     "init_method": "from_data",  # "fixed"
     "fixed_init_observation": [325.0, 0.0, 3.1, 0.0],
     "init_data_file": "../../../resources/envs/real_cartpole/data_recordings/initial_observation_samples__2024-02-01_15-10-13__buffersize_8.csv",
-    "max_episode_steps": 500,
+    "max_episode_length": 500,
 }
 
-CONFIG_LSTM = {
+DEFAULT_CONFIG_LSTM = {
     "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/lstm_2026-01-08",
     "tf_model_names": [
         "model_1",
@@ -52,7 +52,7 @@ CONFIG_LSTM = {
     "init_method": "from_data",  # "fixed"
     "fixed_init_observation": [325.0, 0.0, 3.1, 0.0],
     "init_data_file": "../../../resources/envs/real_cartpole/data_recordings/initial_observation_samples__2024-02-01_15-10-13__buffersize_10.csv",
-    "max_episode_steps": 500,
+    "max_episode_length": 500,
 }
 
 
@@ -133,7 +133,7 @@ class RealCartPoleEnv(gym.Env):
             env_config: Dictionary with (additional) environment specifications
             (if not provided, use parameters from DEFAULT_CONFIG)
         """
-        self.config = {**CONFIG_MLP}
+        self.config = {**DEFAULT_CONFIG_MLP}
         if env_config is not None:
             assert isinstance(env_config, dict), "env_config must be a dict"
             self.config.update(env_config)
@@ -180,7 +180,7 @@ class RealCartPoleEnv(gym.Env):
         )
 
         self.state = None
-        self.max_episode_steps = self.config.get("max_episode_steps", None)
+        self.max_episode_steps = self.config.get("max_episode_length", None)
         self.step_count = 0
         self.reset_count = 0
 
@@ -274,10 +274,11 @@ class RealCartPoleEnv(gym.Env):
             reward,
             terminated,
             False,
-            {"mean_reward_from_models": mean_reward_from_models},
+            {"mean_reward_from_models": mean_reward_from_models,
+             "model_input_buffer": list(self._model_input_buffer)},
         )
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(
                 self.config["fixed_init_observation"], dtype=np.float32
@@ -286,7 +287,7 @@ class RealCartPoleEnv(gym.Env):
                 self._model_input_buffer.append(
                     self._observation_to_model_input_vector(initial_observation_vector)
                 )
-                self.state = initial_observation_vector
+            self.state = initial_observation_vector
         elif self.config["init_method"] == "from_data":
             initial_model_inputs = self.initial_observations[
                 self.reset_count % len(self.initial_observations)
@@ -304,7 +305,7 @@ class RealCartPoleEnv(gym.Env):
         self.step_count = 0
         self.reset_count += 1
 
-        return self.state, {}
+        return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
     @staticmethod
     def compute_reward(obs):
@@ -466,3 +467,12 @@ class RealCartPoleEnv(gym.Env):
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
+
+
+def create_real_cartpole_env(**kwargs) -> RealCartPoleEnv:
+    """Factory function to create real cartpole environment with specified config."""
+
+    config = {**DEFAULT_CONFIG_MLP}
+    config.update(kwargs)
+
+    return RealCartPoleEnv(config)

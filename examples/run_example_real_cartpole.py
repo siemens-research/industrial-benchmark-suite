@@ -7,46 +7,40 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from matplotlib import pyplot as plt
+from gymnasium.envs.registration import make
 
-from ibs.envs.real_cartpole.real_cartpole_env import (
-    CONFIG_LSTM,
-    CONFIG_MLP,
-    RealCartPoleEnv,
-)
+import ibs.envs.real_cartpole
 
+ENV_ID = "RealCartPole-v0"
 NUM_EPISODES = 5
 MAX_EPISODE_STEPS = 200
+INIT_METHOD = "from_data"  # "fixed" or "from_data"
 RENDER_SCENE = True
 
-if __name__ == "__main__":
-    config = {**CONFIG_MLP}  # CONFIG_LSTM, CONFIG_MLP
-    config.update(
-        {
-            "max_episode_steps": MAX_EPISODE_STEPS,
-            "init_method": "from_data",  # "fixed", "from_data"
-        }
-    )
-    env = RealCartPoleEnv(config)
+PATH_TO_POLICY_MODEL = Path(
+    "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_2/"
+    "checkpoint_000017"
+).resolve()
+POLICY_BUFFER_SIZE = 8
 
-    buffer_size_policy = 8
-    policy_model = tf.saved_model.load(
-        Path(
-            "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_2/"
-            "checkpoint_000017"
-        ).resolve()
+if __name__ == "__main__":
+    env = make(
+        ENV_ID,
+        init_method=INIT_METHOD,
+        max_episode_length=MAX_EPISODE_STEPS,
     )
+    policy_model = tf.saved_model.load(PATH_TO_POLICY_MODEL)
 
     for _ in range(NUM_EPISODES):
         observations, actions, rewards, infos = [], [], [], []
         rewards_from_models = []
         terminated = False
-        obs, _ = env.reset()
+        obs, info = env.reset()
+        model_input_buffer = info["model_input_buffer"]
         t_start = time.time()
         step_count = 0
         while not terminated:
-            policy_input = np.hstack(
-                list(env._model_input_buffer)[-buffer_size_policy:]
-            )
+            policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
             action = policy_model([policy_input])[0]
             # action = np.array([0.5], dtype=np.float32)  # for testing purpose only
             # action = env.action_space.sample()  # for testing purpose only
@@ -56,6 +50,7 @@ if __name__ == "__main__":
             rewards.append(reward)
             rewards_from_models.append(info["mean_reward_from_models"])
             infos.append(info)
+            model_input_buffer = info["model_input_buffer"]
             if RENDER_SCENE:
                 env.render()
             step_count += 1

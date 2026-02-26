@@ -1,81 +1,75 @@
 """Example of how to run the 4-tank process benchmark using a pre-trained MOOSE policy."""
 
-import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from matplotlib import pyplot as plt
+from gymnasium.envs.registration import make
 
-from ibs.envs.four_tank.four_tank_env import FourTankEnv, DEFAULT_CONFIG
+import ibs.envs.four_tank
 
+ENV_ID = "FourTank-v0"
+NUM_EPISODES = 5
 MAX_EPISODE_STEPS = 100
-# RENDER_SCENE = True
+INIT_METHOD = "from_data"
+RENDER_SCENE = False
+
+PATH_TO_POLICY_MODEL = Path(
+    "../resources/envs/four_tank/policy_models/run_05/checkpoint_000020"
+).resolve()
+POLICY_BUFFER_SIZE = 12
 
 if __name__ == "__main__":
-    config = {**DEFAULT_CONFIG}
-    config.update(
-        {
-            "max_episode_steps": MAX_EPISODE_STEPS,
-            "init_method": "fixed",
-        }
+    env = make(
+        ENV_ID,
+        init_method=INIT_METHOD,
+        max_episode_length=MAX_EPISODE_STEPS,
     )
-    env = FourTankEnv(config)
+    policy_model = tf.saved_model.load(PATH_TO_POLICY_MODEL)
 
-    buffer_size_policy = 12
-    policy_model = tf.saved_model.load(
-        Path(
-            "../resources/envs/four_tank/policy_models/run_05/" "checkpoint_000020"
-        ).resolve()
-    )
+    for _ in range(NUM_EPISODES):
+        observations, actions, rewards, infos = [], [], [], []
+        terminated = False
+        obs, info = env.reset()
+        model_input_buffer = info["model_input_buffer"]
+        step_count = 0
+        while not terminated:
+            policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
+            action = policy_model([policy_input])[0]
+            # action = np.array(5*[0.0], dtype=np.float32)  # for testing purpose only
+            # action = env.action_space.sample()  # for testing purpose only
+            obs, reward, terminated, _, info = env.step(action)
+            observations.append(obs)
+            actions.append(action)
+            rewards.append(reward)
+            infos.append(info)
+            model_input_buffer = info["model_input_buffer"]
+            # if RENDER_SCENE:
+            #     env.render()
+            step_count += 1
 
-    observations, actions, rewards, infos = [], [], [], []
-    terminated = False
-    obs, _ = env.reset()
-    t_start = time.time()
-    step_count = 0
-    while not terminated:
-        policy_input = np.hstack(list(env._model_input_buffer)[-buffer_size_policy:])
-        action = policy_model([policy_input])[0]
-        # action = np.array(5*[0.0], dtype=np.float32)  # for testing purpose only
-        # action = env.action_space.sample()  # for testing purpose only
-        obs, reward, terminated, _, info = env.step(action)
-        observations.append(obs)
-        actions.append(action)
-        rewards.append(reward)
-        infos.append(info)
-        # if RENDER_SCENE:
-        #     env.render()
-        step_count += 1
+        res = np.concatenate(
+            [
+                observations,
+                actions,
+                np.array(rewards).reshape(len(rewards), 1),
+            ],
+            axis=1,
+        )
+        df_env = pd.DataFrame(res, columns=env.unwrapped.obs_names + env.unwrapped.actions_names + ["Reward"])
 
-    t_stop = time.time()
-    duration = t_stop - t_start
-    print(
-        f"Total execution time for {step_count} steps: "
-        f"{duration:.2f}s ({duration / step_count:.3f}s per step)"
-    )
+        # Group observations and objectives according to env.unwrapped.obs_objectives_mapping
+        axes = df_env[
+            [obs for obs in env.unwrapped.obs_names if obs not in env.unwrapped.objective_names] + ["Reward"]
+        ].plot(subplots=True, figsize=(12, 10))
+        for obs, obj in env.unwrapped.obs_objectives_mapping.items():
+            if obs in df_env.columns and obj in df_env.columns:
+                # Find the subplot index for the objective
+                idx = env.unwrapped.obs_names.index(obs)
+                df_env[obj].plot(ax=axes[idx], label=obj, c="red", linestyle="--")
+                axes[idx].legend()
 
-    res = np.concatenate(
-        [
-            observations,
-            actions,
-            np.array(rewards).reshape(len(rewards), 1),
-        ],
-        axis=1,
-    )
-    df_env = pd.DataFrame(res, columns=env.obs_names + env.actions_names + ["Reward"])
-
-    # Group observations and objectives according to env.obs_objectives_mapping
-    axes = df_env[
-        [obs for obs in env.obs_names if obs not in env.objective_names] + ["Reward"]
-    ].plot(subplots=True, figsize=(12, 10))
-    for obs, obj in env.obs_objectives_mapping.items():
-        if obs in df_env.columns and obj in df_env.columns:
-            # Find the subplot index for the objective
-            idx = env.obs_names.index(obs)
-            df_env[obj].plot(ax=axes[idx], label=obj, c="red", linestyle="--")
-            axes[idx].legend()
-
-    plt.tight_layout()
-    plt.show()
+        plt.tight_layout()
+        plt.show()
