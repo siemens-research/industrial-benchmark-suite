@@ -106,7 +106,7 @@ class control_from_actions(ChannelGenerator):
         if np.isnan(cur_val):
             cur_val = 0.0
         self.last_val += cur_val
-        return self.last_val
+        return float(self.last_val)
 
 
 class differences(ChannelGenerator):
@@ -125,7 +125,7 @@ class differences(ChannelGenerator):
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
             self.last_val = cur_val
-            return self.replay[timestep]
+            return float(self.replay[timestep])
         if cur_val is None or np.isnan(cur_val):
             return 0.0
         previous_val = self.last_val

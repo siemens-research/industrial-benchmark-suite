@@ -13,6 +13,11 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def main() -> None:
+    """Root CLI command group for IBS tools."""
+
+
 @app.command('ccbench')
 def ccbench(
     data_dir: Optional[Path] = typer.Option(
@@ -21,10 +26,9 @@ def ccbench(
         help='Path of the directory which receives generated data, default "./data" (but potentially overwritten by configuration file).',
     ),
     config_file: Path = typer.Option(
-        Path('config') / 'ccbench_default.yaml',
+        Path(__file__).resolve().parents[1] / 'resources' / 'envs' / 'ccbench' / 'config' / 'ccbench_default.yaml',
         '--config-file',
-        help='Filename of the YAML configuration file with specifications for the data to process/generate, '
-             'default "./config/ccbench_default.yaml".',
+        help='Filename of the YAML configuration file with specifications for the data to process/generate.',
     ),
 ):
     """Generate synthetic timeseries data from the Continuous Casting Benchmark environment."""

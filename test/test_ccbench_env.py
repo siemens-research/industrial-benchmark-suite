@@ -87,6 +87,17 @@ def test_ccbench_cli_generates_small_dataset(tmp_path: Path):
         yaml.safe_dump(config, handle, sort_keys=False)
 
     runner = CliRunner()
+    result_without_subcommand = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(tmp_path),
+            "--config-file",
+            str(config_file),
+        ],
+    )
+    assert result_without_subcommand.exit_code != 0
+
     result = runner.invoke(
         app,
         [
@@ -97,7 +108,7 @@ def test_ccbench_cli_generates_small_dataset(tmp_path: Path):
             str(config_file),
         ],
     )
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 0, result.stdout + "\n" + result.stderr
 
     data_file = tmp_path / "gen_process_data.parquet"
     assert data_file.exists()
