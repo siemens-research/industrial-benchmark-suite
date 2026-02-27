@@ -64,6 +64,7 @@ class CCBenchEnv(GoalEnv):
         episode_step = config.get("episode_step")
         render_file = config.get("render_file")
         keep_intermediate_series = config.get("keep_intermediate_series", True)
+        max_episode_steps = config.get("episode_length", None)
 
         if "action_spec" in config:
             process_spec = _apply_action_limits(process_spec, config["action_spec"])
@@ -75,6 +76,8 @@ class CCBenchEnv(GoalEnv):
         self.timestep_size = freq or pd.Timedelta(seconds=1)
         self.episode_step_size = episode_step or pd.DateOffset(days=1, normalize=True)
         self.keep_intermediate_series = keep_intermediate_series
+        self.max_episode_steps = max_episode_steps
+        self.step_count = 0
 
         self.action_control_map: Dict[str, Optional[str]] = {
             k: None for k, spec in self.process_spec.items() if spec["semantics"] == "action"
@@ -98,7 +101,7 @@ class CCBenchEnv(GoalEnv):
             if channel in self.process_spec and "limits" in self.process_spec[channel]:
                 return gym.spaces.Box(
                     low=np.array(self.process_spec[channel]["limits"][0]),
-                    high=np.array(self.process_spec[channel]["limits"][0]),
+                    high=np.array(self.process_spec[channel]["limits"][1]),
                     shape=None,
                     dtype=np.float32,
                 )
@@ -108,7 +111,7 @@ class CCBenchEnv(GoalEnv):
         state_space: Dict[str, gym.spaces.Space] = {
             k: get_box_space(k)
             for k in (list(self.process_spec.keys()) + list(self.target_obj_map.values()))
-            if k not in self.action_control_map or self.action_control_map[k] is None
+            if (k not in self.action_control_map or self.action_control_map[k] is None) and (k not in self.target_obj_map.values())
         }
         self.observation_space = gym.spaces.Dict(
             {
@@ -156,6 +159,8 @@ class CCBenchEnv(GoalEnv):
                 If provided, `episode_start` is derived from its index.
         """
         super().reset(seed=seed, options=dict(options) if options is not None else None)
+        
+        self.step_count = 0
 
         # find specified or suitable episode start timestamp
         if replay is not None:
@@ -220,7 +225,8 @@ class CCBenchEnv(GoalEnv):
                 ]
 
         if perform_step:
-            observation, _, terminated, truncated, info = self.step({k: np.nan for k in self.action_control_map.keys()})
+            # observation, _, terminated, truncated, info = self.step({k: np.nan for k in self.action_control_map.keys()})
+            observation, _, terminated, truncated, info = self.step({k: 0.0 for k in self.action_control_map.keys()})
             if terminated or truncated:
                 info.setdefault("terminal_reason", "reset_step")
             return observation, info
@@ -244,6 +250,7 @@ class CCBenchEnv(GoalEnv):
         truncated = False
         info = {}
 
+        self.step_count += 1
         self.cur_timestep = self.next_timestep
         if self.cur_timestep is None:
             raise RuntimeError("cur_timestep is None at step entry")
@@ -325,6 +332,10 @@ class CCBenchEnv(GoalEnv):
         observation["achieved_goal"] = goal_values
         observation["desired_goal"] = self.desired_goal
         reward = self.compute_reward(achieved_goal=goal_values, desired_goal=self.desired_goal, info=info)
+        
+        terminated = (
+            self.step_count >= self.max_episode_steps if self.max_episode_steps is not None else False
+        )
 
         cur_ts = self.cur_timestep
         self.next_timestep = cur_ts + self.timestep_size
@@ -438,3 +449,12 @@ def _coerce_timestamp(value: Any) -> dt.datetime:
     if isinstance(value, str):
         return pd.Timestamp(value).to_pydatetime()
     raise TypeError(f"Unsupported start_timestamp type: {type(value).__name__}")
+
+
+def create_ccbench_env(**kwargs) -> CCBenchEnv:
+    """Factory function to create real cartpole environment with specified config."""
+
+    return CCBenchEnv(
+        config_file=Path(__file__).resolve().parents[3] / "resources" / "envs" / "ccbench" / "config" / "ccbench_default.yaml",
+        **kwargs
+    )
