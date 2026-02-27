@@ -1,7 +1,7 @@
 """
 Generation of artificial multivariate time-series data, suitable for use as OpenAI Gym environment.
 
-(c) 2020 Siemens AG
+(c) 2026 Siemens AG
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

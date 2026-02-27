@@ -7,9 +7,11 @@ Gymnasium API.
 The original file is provided under the MIT License, see below.
 
 
-The MIT License
-
 Copyright (c) 2022 Farama Foundation
+with modifications by the Siemens Team for the Industry Benchmarks Suite (c) 2026 Siemens AG
+
+
+The MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

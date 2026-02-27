@@ -4,7 +4,10 @@ Collection of functions for generation of artificial multivariate time-series da
 Collection of functions which jointly sample/transform time series data according to a provided specification, resulting
 in a collection of time series episodes in a sequence of Pandas DataFrames. The main interface is gen_data().
 
-@author: Holger Schoener <holger.schoener@siemens.com>
+(c) 2026 Siemens AG
+
+Author:
+    Holger Schoener <holger.schoener@siemens.com>
 """
 
 import datetime as dt

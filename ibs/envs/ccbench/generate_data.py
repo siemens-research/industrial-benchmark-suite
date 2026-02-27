@@ -1,7 +1,7 @@
 """
 Data generation and visualization.
 
-(c) 2020 Siemens AG
+(c) 2026 Siemens AG
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

@@ -1,7 +1,10 @@
 """
 Collection of functions useful for generating or transforming arrays of data.
 
-@author: Holger Schoener <holger.schoener@siemens.com>
+(c) 2026 Siemens AG
+
+Author:
+    Holger Schoener <holger.schoener@siemens.com>
 """
 
 import warnings

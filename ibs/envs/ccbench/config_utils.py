@@ -1,4 +1,11 @@
-"""Helpers for CCBench configuration handling."""
+"""
+Helpers for CCBench configuration handling.
+
+(c) 2026 Siemens AG
+
+Author:
+    Holger Schoener <holger.schoener@siemens.com>
+"""
 
 import datetime as dt
 from pathlib import Path
