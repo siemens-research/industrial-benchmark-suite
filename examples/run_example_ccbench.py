@@ -1,4 +1,11 @@
-"""Example of how to run the distillation process benchmark using a pre-trained MOOSE policy."""
+"""
+Example of how to run the ccbench environment using a random sparse policy.
+
+(c) 2026 Siemens AG
+
+Author:
+    Holger Schoener <holger.schoener@siemens.com>
+"""
 
 import numpy as np
 import pandas as pd
@@ -49,7 +56,9 @@ if __name__ == "__main__":
         # Group observations and objectives according to env.unwrapped.target_obj_map
         observation_names = list(env.unwrapped.observation_space["observation"].spaces.keys()) # pyright: ignore[reportIndexIssue]
         axes = df_env[
-            [obs for obs in observation_names if obs not in env.unwrapped.target_obj_map.values()] + ["Reward"]
+            [obs for obs in observation_names
+             if obs not in env.unwrapped.target_obj_map.values() and obs not in env.unwrapped.temp_channels
+            ] + ["Reward"]
         ].plot(subplots=True, figsize=(12, 10))
         for obs, obj in env.unwrapped.target_obj_map.items():
             if obs in df_env.columns and obj in df_env.columns:
