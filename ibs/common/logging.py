@@ -4,9 +4,7 @@ import datetime as dt
 import logging
 import logging.config
 import os
-import sys
 import textwrap
-import traceback
 from typing import Mapping
 from typing import Optional
 from typing import Sequence
@@ -15,19 +13,6 @@ from typing import Union
 import yaml
 
 from ibs.common.sequences import addtodict
-
-
-class DummyLogger:
-    @classmethod
-    def info(cls, msg, exc_info=False, *args, **kwargs):
-        sys.stdout.write(str(msg))
-        sys.stdout.write("\n")
-        if exc_info:
-            sys.stdout.write(traceback.format_exc())
-            sys.stdout.write("\n")
-    debug = info
-    warning = info
-    error = info
 
 
 def get_logging_config_str(name: str, id_str: Optional[str]=None, logfiles: Union[str, Sequence[str]] | None = None):
@@ -99,22 +84,3 @@ def configure_logger(name: str, config: Mapping):
     logging.config.dictConfig(yaml.full_load(logging_config_yaml))
     logger = logging.getLogger(name)
     return logger
-
-
-orig_warnings_handler = None
-def enable_warning_traces(enable=True):
-    import traceback
-    import warnings
-    global orig_warnings_handler
-    
-    if enable and orig_warnings_handler is None:
-        orig_warnings_handler = warnings.warn
-        def warn(*args, **kwargs):
-            tb = traceback.extract_stack()
-            assert orig_warnings_handler is not None
-            orig_warnings_handler(*args, **kwargs)
-            print("".join(traceback.format_list(tb)[:-1]))
-        warnings.warn = warn
-    elif not enable and orig_warnings_handler is not None:
-        warnings.warn = orig_warnings_handler
-        orig_warnings_handler = None
