@@ -1,23 +1,40 @@
 [tool.poetry]
 name = "Industrial Benchmark Suite"
-version = "0.0.0"
+version = "0.1.0"
 description = "Collection of industrial benchmark environments."
 authors = [
     "Marc Weber <marc-weber@siemens.com>",
+    "Holger Schoener <holger.schoener@siemens.com>",
 ]
+license = "Siemens Inner Source License v1.4"
+readme = "README.md"
+homepage = "https://code.siemens.com/ai/industrial-benchmark-suite"
+repository = "https://code.siemens.com/ai/industrial-benchmark-suite"
+keywords = ["reinforcement-learning", "gym", "benchmark", "industrial-control", "timeseries"]
 
 packages = [
     { include = "ibs" }
 ]
 
+[tool.poetry.scripts]
+gen_industry_benchmarks = "ibs.__main__:app"
+
 [tool.poetry.dependencies]
 python = ">=3.10,<3.14"
 gymnasium = {version=">=0.26.1", extras=["classic-control"]}
-tensorflow = "*"
-pandas = "*"
 matplotlib = "*"
+numpy = "*"
+pandas = "*"
+pyarrow = ">=14"
+pyyaml = ">=5.3"
+scipy = "*"
+tensorflow = "*"
+#tensorflow = ">=2.0,< 2.16"
+#tensorflow-io-gcs-filesystem = {version = "^0.25.0", markers = "platform_machine != \"arm64\" or platform_system != \"Darwin\""}
+tqdm = "*"
+typer = "*"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "*"
 isort = "*"
 mkdocs = "*"
