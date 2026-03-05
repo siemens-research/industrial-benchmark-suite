@@ -1,0 +1,160 @@
+# string used in log messages, result file names, etc.
+#id:              "artificial_process_data_{date:%Y-%m-%d}"
+id:              "tfmdata"
+# output directory for the data generator. This directory is automatically generated.
+# variable is usable in further filenames by python-format ("{}") syntax, is relative to script directory, not config directory!
+data_dir:        "./data"
+# where should generated data be placed?
+export_filename: "{data_dir}/gen_process_data.parquet"
+# logging is also sent to this file
+log_file:        "{data_dir}/gen_process_data.log"
+
+# how many non-adjacent time periods should be generated?
+# When comparing a generator episode to real data, the equavalent could e.g. be recordings from different example days
+# within a year, a curated "best of" compilation of interesting cases etc. - the timely order of episodes is unknown
+# episodes:        100
+episodes:        5
+#episodes:        1
+# how long (seconds) should each episode be?
+# episode_length:  5000
+episode_length:  1000
+#episode_length:  500
+# include data of channels marked as semantics="temp" in the process_spec below?
+include_temporary:    False
+# include data of channels only computed as intermediate channel values in chains specified in process_spec type lists?
+include_intermediate: False
+# include_intermediate: True
+
+# random seed for data generation, used for numpy.random.*
+seed: 729256
+
+# call plt.show() for each figure?
+show_plots:      False
+# save generated plots to files?
+save_plots:      True
+# return a list of generated figures?
+return_plots:    False
+# should timeseries plots also show (indented) intermediate series? Only relevant if include_temporary above is True
+# plot_with_intermediates: False
+plot_with_intermediates: True
+# should timeseries plots also show temporary series only relevant for computation of other series? Only relevant if include_temporary above is True
+# plot_with_temporaries: False
+plot_with_temporaries: True
+# plot dimensions [inch] and resolution [dots per inch]
+plot_width:      25
+plot_height:     3
+dpi:             150
+
+# controls specification, keys are names of generated series. Each requires a "type", corresponding to a data generation
+# function in generators.py, or to a list of these. Other keys contain parameters for these functions.
+action_spec:
+    "BP_action": # example time series where we combine a kind of random walk with a RELU approximation
+                 # (custom functions like this can be provided as lambda via function_callback type and cb_callback parameter)
+        # general action/process channel specification
+        type:        ["spike_action_gen", "controls_exponential_action_scaler"]
+        #temp:        False            # temporary channel which should not be used as action/process channel but is needed as input to other channel computations
+        semantics:   "action"         # Which kind of channel does this correspond to? "action", "temp"
+        limits:      [-4.0, 4.0]      # to which interval should the resulting action values (after transformation/scaling/offset) be limited?
+        # spike_action_gen arguments
+        sag_stepslen:     10          # how long is the control not changed (action=0) after an action?
+        sag_action_prob:  0.2         # what is the probability of a action after stepslen have passed since the last action?
+        sag_dist:         "normal"    # how should the generated spike values be distributed
+        sag_scale:        2.0         # how should the distribution be scaled (multiplication of generated random values)
+        sag_offset:       0.0         # what should be added to the generated and scaled random action values?
+        # controls_exponential_action_scaler arguments
+        ceas_assoc_ctrl_channel: "BP" # which is the control channel (in process_spec) for which the actions should be generated?
+        ceas_decay:       0.1         # by which factor should the cumulated generated raw steps be decayed (only if current step != 0.0 at all)
+        ceas_offset:      25          # mean = exp(0.1*25) ~ 12   # offset term of the unscaled raw control values before taking exponential
+        ceas_factor:      0.1         # scaling of offsetted raw control values before taking the exponential
+        ceas_ctrl_limits: [5.0, 30.0] # clipping of action such that generated transformed control channel values are in these limits
+    "DS_action":
+        type:        ["spike_action_gen", "controls_limiter"]
+        semantics:   "action"
+        # spike_action_gen arguments
+        sag_stepslen:     12
+        sag_action_prob:  0.1
+        sag_dist:         "uniform"
+        sag_scale:        2.0
+        sag_offset:       0.0
+        sag_limits:       [-3.0, 3.0]
+        # controls_limiter arguments
+        cl_assoc_ctrl_channel: "DS"   # which is the control channel (in process_spec) for which the actions should be generated?
+        cl_offset:        5.0         # desired mean of the resulting control values (to which decay should drive the control values)
+        cl_decay:         0.1         # by which factor should the cumulated generated control values be decayed (only if current step != 0.0 at all)
+        cl_ctrl_limits:   [1.0, 12.0] # clipping of action such that resulting control channel values are in these limits
+    "HE_action": # random walk smoothed by filtering it with a bell-shaped curve, then taking differences to obtain actions
+        type:        ["random_walk_overlay", "apply_filter", "differences", "controls_limiter"]
+        semantics:   "action"
+        limits:      [-0.1, 0.1]
+        rwo_offset:  5.0
+        rwo_steplen: [1]
+        rwo_scales:  [6.0]
+        rwo_decays:  [0.15]
+        rwo_dists:   "normal"
+        af_kernel:   "norm_filter(signal.windows.hann(500))"
+        # controls_limiter arguments
+        cl_assoc_ctrl_channel: "HE"
+        cl_ctrl_limits:   [0.0, 15.0]
+
+# process specification, keys are names of generated series. Each requires a "type", corresponding to a data generation
+# function in generators.py, or to a list of these. Other keys contain parameters for these functions.
+process_spec:
+    "BP": # control channel resulting from the actions specified in BP_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"    # Which kind of channel does this correspond to? "control", "action", "target", "state", "context", "temp"
+        assoc_action_channel: "BP_action"   # which is the action channel to be used as source for control changes of this channel?
+        limits:      [5.0, 30.0]  # what are the limits not to be exceeded by values of this control channel?
+        cfa_init:    12.0         # what value should be used as initial value for this control channel? one of <initial-value>, [<min>, <max-of-random-initialization>]
+    "DS": # control channel resulting from the actions specified in DS_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"
+        assoc_action_channel: "DS_action"
+        limits:      [1.0, 12.0]
+        cfa_init:    [2.0, 10.0]
+    "HE": # control channel resulting from the actions specified in HE_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"
+        assoc_action_channel: "HE_action"
+        limits:      [0.0, 15.0]
+        cfa_init:    [2.0, 12.0]
+    "AT": # random walk smoothed by filtering it with a bell-shaped curve
+        type:        ["random_walk_overlay", "apply_filter"]
+        semantics:   "state"
+        limits:      [-20.0, 40.0]
+        rwo_offset:  5.0
+        rwo_steplen: [1]
+        rwo_scales:  [5.0]
+        rwo_decays:  [0.1]
+        rwo_dists:   "normal"
+        af_kernel:   "norm_filter(signal.windows.hann(300))"
+    "wave": # sine wave modulated on top of the HE series ("inputs" allows to provide several time series to the
+            # callback function at the same time, thus i=index[x] and t=AT[x] in this example.
+            # This is handy to craft correlations into the generated time-series
+        type:        "function_callback"
+        semantics:   "temp"
+        fc_inputs:   ["index", "HE"]
+        fc_callback: "lambda i, t: 0.2 * np.exp(t.iloc[-1]/5-1.0) * np.sin((i[-1]-i[0]).total_seconds())"
+        #fc_callback: "lambda i,t: 0.2 * np.exp(t/10) * pd.Series(np.sin((i-i[0]).values.astype(float)), index=i)"
+    "OD": # use a filter to shape a time series that correlates with three inputs via a varying lag and add some noise
+        type:          ["function_callback", "apply_filter", "white_noise"]
+        semantics:     "target"
+        vop_type:      "setpoint"     # type of reward for this target: "setpoint", "upper_limit", "lower_limit"
+        limits:        [0.1, 15.0]
+        fc_inputs:     ["BP", "DS", "AT", "wave"]
+        fc_callback:   "lambda bp,ds,at,wave: wave.iloc[-1] + 1.5 * bp.iloc[-4] / ds.iloc[-2] + 0.1 * at.iloc[-1]"
+        #fc_callback:   "lambda bp,ds,wave: wave + 1.5 * bp.shift(3).fillna(method='bfill') / ds.shift(1).fillna(method='bfill')"
+        af_kernel:     [0,0,0,0.1,0.25,0.35,0.2,0.1]
+        wn_scale:      0.1
+        wn_dist:       "normal"
+    "WT":
+        type:          ["function_callback", "white_noise", "apply_filter"]
+        semantics:     "target"
+        vop_type:      "setpoint"
+        limits:        [0.01, 1.2]
+        fc_inputs:     ["BP", "DS", "AT"]
+        fc_callback:   "lambda bp,ds,at: 15.0 / bp.iloc[-6] / ds.iloc[-3] / (1.0 - 0.02 * at.iloc[-1])"
+        #fc_callback:   "lambda bp,ds: 15.0 / bp.shift(5).fillna(method='bfill') / ds.shift(2).fillna(method='bfill')"
+        wn_scale:      0.02
+        wn_dist:       "normal"
+        af_kernel:     [0,-0.2,-0.1,0.2,0.25,0.25,0.2,0.2,0.1]
+

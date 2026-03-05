@@ -9,10 +9,6 @@ __pycache__/
 # Pyenv local setup
 .python-version
 
-# Data and results folders (should use OneDrive syncing)
-data
-results
-
 # Distribution / packaging
 .Python
 build/
@@ -127,10 +123,30 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.idea/
+# IDEs
 .vscode/
+.idea/
 
-/src/__init__.py
-/src/siemens/__init__.py
+# OS
+*.swp
+*.swo
+.DS_Store
+
+# Backup files
+*.bak
+*~
+
+# Data directory (keep structure but ignore contents)
+data/*
+!data/.gitkeep
+
+# Results folders (should use OneDrive syncing)
 results
-data
+
+# Installation-dependent config files (their corresponding .templ.yaml files should be tracked)
+/resources/envs/**/config/*.yaml
+!/resources/envs/**/config/ccbench_default.yaml
+!/resources/envs/**/config/*.templ.yaml
+
+# /src/__init__.py
+# /src/siemens/__init__.py
