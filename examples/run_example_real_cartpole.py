@@ -18,10 +18,15 @@ INIT_METHOD = "from_data"  # "fixed" or "from_data"
 RENDER_SCENE = True
 
 PATH_TO_POLICY_MODEL = Path(
-    "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_2/"
-    "checkpoint_000017"
+    "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_lstm_1/"
+    "checkpoint_000020"
 ).resolve()
-POLICY_BUFFER_SIZE = 8
+POLICY_BUFFER_SIZE = 10
+# PATH_TO_POLICY_MODEL = Path(
+#     "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_2/"
+#     "checkpoint_000017"
+# ).resolve()
+# POLICY_BUFFER_SIZE = 8
 
 if __name__ == "__main__":
     env = make(
@@ -81,5 +86,6 @@ if __name__ == "__main__":
 
         df_env.plot(subplots=True, figsize=(10, 8))
 
+        plt.grid(True)
         plt.tight_layout()
         plt.show()

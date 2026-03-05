@@ -320,6 +320,11 @@ class FourTankEnv(gym.Env):
             else:
                 raise ValueError(f"Objective variable {obj_var} not found in state variables.")
 
+    def render(self, mode="human"):
+        """Render the environment (currently a no-op placeholder)."""
+        # TODO: Implement rendering of the 4-tank system state (e.g., using matplotlib or a custom visualization)
+        pass
+
 
 def create_four_tank_env(**kwargs) -> FourTankEnv:
     """Factory function to create real cartpole environment with specified config."""

@@ -472,7 +472,8 @@ class RealCartPoleEnv(gym.Env):
 def create_real_cartpole_env(**kwargs) -> RealCartPoleEnv:
     """Factory function to create real cartpole environment with specified config."""
 
-    config = {**DEFAULT_CONFIG_MLP}
+    config = {**DEFAULT_CONFIG_LSTM}
+    # config = {**DEFAULT_CONFIG_MLP}
     config.update(kwargs)
 
     return RealCartPoleEnv(config)
