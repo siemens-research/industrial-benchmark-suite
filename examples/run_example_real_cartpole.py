@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 from gymnasium.envs.registration import make
 
 import ibs.envs.real_cartpole
+from ibs.common.utils import resolve_path
 
 ENV_ID = "RealCartPole-v0"
 NUM_EPISODES = 5
@@ -17,10 +18,10 @@ MAX_EPISODE_STEPS = 200
 INIT_METHOD = "from_data"  # "fixed" or "from_data"
 RENDER_SCENE = True
 
-PATH_TO_POLICY_MODEL = Path(
+PATH_TO_POLICY_MODEL = resolve_path(
     "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_8/"
-    "checkpoint_000020"
-).resolve()
+    "checkpoint_000020", __file__
+)
 POLICY_BUFFER_SIZE = 10
 
 
