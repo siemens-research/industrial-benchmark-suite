@@ -15,7 +15,7 @@ ENV_ID = "RealCartPole-v0"
 NUM_EPISODES = 5
 MAX_EPISODE_STEPS = 200
 INIT_METHOD = "from_data"  # "fixed" or "from_data"
-RENDER_SCENE = True
+RENDER_SCENE = False
 
 PATH_TO_POLICY_MODEL = Path(
     "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_lstm_1/"
@@ -29,6 +29,7 @@ POLICY_BUFFER_SIZE = 10
 # POLICY_BUFFER_SIZE = 8
 
 if __name__ == "__main__":
+    print("Start")
     env = make(
         ENV_ID,
         init_method=INIT_METHOD,
@@ -45,10 +46,12 @@ if __name__ == "__main__":
         t_start = time.time()
         step_count = 0
         while not terminated:
+            print("Before step:", obs)
             policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
             action = policy_model([policy_input])[0]
             # action = np.array([0.5], dtype=np.float32)  # for testing purpose only
-            # action = env.action_space.sample()  # for testing purpose only
+            action = env.action_space.sample()  # for testing purpose only
+            print("After step:", obs)
             obs, reward, terminated, _, info = env.step(action)
             observations.append(obs)
             actions.append(action)

@@ -35,18 +35,18 @@ DEFAULT_CONFIG_MLP = {
 }
 
 DEFAULT_CONFIG_LSTM = {
-    "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/lstm_2026-01-08",
+    "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/lstm_2025-05-30",
     "tf_model_names": [
         "model_1",
         "model_2",
         "model_3",
         "model_4",
-        "model_5",
-        "model_6",
-        "model_7",
-        "model_8",
-        "model_9",
-        "model_10",
+        # "model_5",
+        # "model_6",
+        # "model_7",
+        # "model_8",
+        # "model_9",
+        # "model_10",
     ],
     "observation_buffer_size": 10,  # 8
     "init_method": "from_data",  # "fixed"
