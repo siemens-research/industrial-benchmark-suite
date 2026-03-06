@@ -242,7 +242,7 @@ class TActionController(threading.Thread):
         # setup logging
         ################
         stateConverter = State()
-        logFilename = ("/tmp/demonstration_classical_no_human_right_%s.csv" % datetime.now().strftime("%Y-%m-%d__%H-%M-%S"))
+        logFilename = ("/old_resources/demonstration_classical_no_human_right_%s.csv" % datetime.now().strftime("%Y-%m-%d__%H-%M-%S"))
 
         csvfile = open(logFilename, 'w')
         fieldNames = ['datetime', 'cartPos', 'cartVel', 'pendPos', 'pendVel', 'action', 'cartController', 'exploration']

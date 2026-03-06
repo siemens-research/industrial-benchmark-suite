@@ -41,12 +41,6 @@ DEFAULT_CONFIG_LSTM = {
         "model_2",
         "model_3",
         "model_4",
-        # "model_5",
-        # "model_6",
-        # "model_7",
-        # "model_8",
-        # "model_9",
-        # "model_10",
     ],
     "observation_buffer_size": 10,  # 8
     "init_method": "from_data",  # "fixed"

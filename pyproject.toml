@@ -25,12 +25,9 @@ gymnasium = {version=">=0.26.1", extras=["classic-control"]}
 matplotlib = "*"
 numpy = "*"
 pandas = "*"
-pyarrow = ">=14"
 pyyaml = ">=5.3"
 scipy = "*"
 tensorflow = "*"
-#tensorflow = ">=2.0,< 2.16"
-#tensorflow-io-gcs-filesystem = {version = "^0.25.0", markers = "platform_machine != \"arm64\" or platform_system != \"Darwin\""}
 tqdm = "*"
 typer = "*"
 
