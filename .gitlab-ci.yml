@@ -47,7 +47,13 @@ variables:
 
 pre-commit:
   stage: test
-  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py3.11
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py${PYTHON_VERSION}
   variables:
     PRE_COMMIT_HOME: $CI_PROJECT_DIR/.cache/pre-commit
     RUFF_OUTPUT_FILE: .gitlab-code-quality-report.json
