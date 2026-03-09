@@ -10,10 +10,7 @@ from ibs.envs.ccbench.ccbench_env import CCBenchEnv
 
 
 def _load_default_ccbench_config() -> dict:
-    config_path = (
-        Path(__file__).resolve().parents[1]
-        / "resources/envs/ccbench/config/ccbench_default.yaml"
-    )
+    config_path = Path(__file__).resolve().parents[1] / "resources/envs/ccbench/config/ccbench_default.yaml"
     with open(config_path, "rt", encoding="utf8") as handle:
         return yaml.safe_load(handle)
 

@@ -169,9 +169,7 @@ class RealCartPoleEnv(gym.Env):
 
         self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32)
 
-        self._model_input_buffer = deque(
-            [], maxlen=self.config["observation_buffer_size"]
-        )
+        self._model_input_buffer = deque([], maxlen=self.config["observation_buffer_size"])
 
         self.state = None
         self.max_episode_steps = self.config.get("max_episode_length", None)
@@ -179,9 +177,9 @@ class RealCartPoleEnv(gym.Env):
         self.reset_count = 0
 
         if self.config["init_method"] == "from_data":
-            assert resolve_path(
-                self.config["init_data_file"], __file__
-            ).exists(), "Initial observation samples file does not exist."
+            assert resolve_path(self.config["init_data_file"], __file__).exists(), (
+                "Initial observation samples file does not exist."
+            )
             self.initial_observations = np.loadtxt(
                 resolve_path(self.config["init_data_file"], __file__),
                 delimiter=",",
@@ -218,12 +216,10 @@ class RealCartPoleEnv(gym.Env):
 
         # Process tf model output and split into next_state/reward information
         state_outputs_by_model = [
-            dynamic_models_output[0][0].numpy()
-            for dynamic_models_output in dynamic_models_outputs
+            dynamic_models_output[0][0].numpy() for dynamic_models_output in dynamic_models_outputs
         ]
         reward_outputs_by_model = [
-            dynamic_models_output[1][0].numpy()
-            for dynamic_models_output in dynamic_models_outputs
+            dynamic_models_output[1][0].numpy() for dynamic_models_output in dynamic_models_outputs
         ]
 
         next_state_by_model = [
@@ -233,9 +229,7 @@ class RealCartPoleEnv(gym.Env):
             )[-1]
             for state_output in state_outputs_by_model
         ]
-        reward_by_model = [
-            reward_output[0] for reward_output in reward_outputs_by_model
-        ]
+        reward_by_model = [reward_output[0] for reward_output in reward_outputs_by_model]
 
         # Compute mean over model ensemble members to be used as resulting state/reward
         mean_next_state_from_models = np.mean(next_state_by_model, axis=0)
@@ -244,55 +238,41 @@ class RealCartPoleEnv(gym.Env):
         # Update internal state representation applying mean over forecast model results
         self._model_input_buffer.append(mean_next_state_from_models)
 
-        self.state = self._model_output_vector_to_observation(
-            mean_next_state_from_models
-        )
+        self.state = self._model_output_vector_to_observation(mean_next_state_from_models)
 
         reward = self.compute_reward(self.state)
 
         self.step_count += 1
 
         terminated = (
-            not self.observation_space.contains(self.state)
-            or self.step_count >= self.max_episode_steps
+            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_steps
             if self.max_episode_steps is not None
             else False
         )
         if terminated:
-            reward += -1.0 * np.clip(
-                (self.max_episode_steps - self.step_count), 0, None
-            )
+            reward += -1.0 * np.clip((self.max_episode_steps - self.step_count), 0, None)
 
         return (
             self.state,
             reward,
             terminated,
             False,
-            {"mean_reward_from_models": mean_reward_from_models,
-             "model_input_buffer": list(self._model_input_buffer)},
+            {"mean_reward_from_models": mean_reward_from_models, "model_input_buffer": list(self._model_input_buffer)},
         )
 
     def reset(self, seed=None, options=None):
         if self.config["init_method"] == "fixed":
-            initial_observation_vector = np.array(
-                self.config["fixed_init_observation"], dtype=np.float32
-            )
+            initial_observation_vector = np.array(self.config["fixed_init_observation"], dtype=np.float32)
             for _ in range(self.observation_buffer_size):
-                self._model_input_buffer.append(
-                    self._observation_to_model_input_vector(initial_observation_vector)
-                )
+                self._model_input_buffer.append(self._observation_to_model_input_vector(initial_observation_vector))
             self.state = initial_observation_vector
         elif self.config["init_method"] == "from_data":
-            initial_model_inputs = self.initial_observations[
-                self.reset_count % len(self.initial_observations)
-            ]
+            initial_model_inputs = self.initial_observations[self.reset_count % len(self.initial_observations)]
             initial_model_inputs_reshaped = initial_model_inputs.reshape(
                 -1, initial_model_inputs.shape[0] // self.observation_buffer_size
             )
             self._model_input_buffer.extend(initial_model_inputs_reshaped)
-            self.state = self._model_output_vector_to_observation(
-                initial_model_inputs_reshaped[-1]
-            )
+            self.state = self._model_output_vector_to_observation(initial_model_inputs_reshaped[-1])
         else:
             raise NotImplementedError("Unknown initialization method.")
 
@@ -330,9 +310,7 @@ class RealCartPoleEnv(gym.Env):
 
         Returns observation vector with the following features: [pos_x, vel_x, pos_ang, vel_ang].
         """
-        return np.array(
-            [out[0], out[1], np.arctan2(out[2], out[3]), out[4]], dtype=np.float32
-        )
+        return np.array([out[0], out[1], np.arctan2(out[2], out[3]), out[4]], dtype=np.float32)
 
     # pylint: disable=inconsistent-return-statements
     def render(self):
@@ -385,9 +363,7 @@ class RealCartPoleEnv(gym.Env):
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             else:  # mode == "rgb_array"
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
         if self.clock is None:
@@ -409,16 +385,16 @@ class RealCartPoleEnv(gym.Env):
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))
 
-        l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
+        left, right, top, bottom = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
         axleoffset = cartheight / 4.0
         cartx = pos_x * scale + self.screen_width / 2.0  # MIDDLE OF CART
         carty = 100  # TOP OF CART
-        cart_coords = [(l, b), (l, t), (r, t), (r, b)]
+        cart_coords = [(left, bottom), (left, top), (right, top), (right, bottom)]
         cart_coords = [(c[0] + cartx, c[1] + carty) for c in cart_coords]
         gfxdraw.aapolygon(self.surf, cart_coords, (0, 153, 153))
         gfxdraw.filled_polygon(self.surf, cart_coords, (0, 153, 153))
 
-        l, r, t, b = (
+        left, right, top, bottom = (
             -polewidth / 2,
             polewidth / 2,
             polelen - polewidth / 2,
@@ -426,7 +402,7 @@ class RealCartPoleEnv(gym.Env):
         )
 
         pole_coords = []
-        for coord in [(l, b), (l, t), (r, t), (r, b)]:
+        for coord in [(left, bottom), (left, top), (right, top), (right, bottom)]:
             coord = pygame.math.Vector2(coord).rotate_rad(-x[2])
             coord = (coord[0] + cartx, coord[1] + carty + axleoffset)
             pole_coords.append(coord)
@@ -458,9 +434,7 @@ class RealCartPoleEnv(gym.Env):
             pygame.display.flip()
 
         elif self.render_mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            )
+            return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
 
 
 def create_real_cartpole_env(**kwargs) -> RealCartPoleEnv:

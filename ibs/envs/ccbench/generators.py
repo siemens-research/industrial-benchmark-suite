@@ -584,7 +584,7 @@ class apply_filter(ChannelGenerator):
             except ValueError as e:
                 raise ValueError(
                     f"convolution failed for cur_val={cur_val}, "
-                    f"with timeseries={str(timeseries[-self.kernel_size:])} and "
+                    f"with timeseries={str(timeseries[-self.kernel_size :])} and "
                     f"kernel={str(self.kernel)}"
                 ) from e
         else:

@@ -1,14 +1,11 @@
 """Example of how to run the 4-tank process benchmark using a pre-trained MOOSE policy."""
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from gymnasium.envs.registration import make
 
-import ibs.envs.four_tank
 from ibs.common.utils import resolve_path
 
 ENV_ID = "FourTank-v0"
@@ -17,9 +14,7 @@ MAX_EPISODE_STEPS = 100
 INIT_METHOD = "from_data"
 RENDER_SCENE = False
 
-PATH_TO_POLICY_MODEL = resolve_path(
-    "../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__
-)
+PATH_TO_POLICY_MODEL = resolve_path("../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__)
 POLICY_BUFFER_SIZE = 12
 
 if __name__ == "__main__":

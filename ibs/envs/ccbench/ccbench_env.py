@@ -32,6 +32,7 @@ from . import generators
 
 class CCBenchEnv(GoalEnv):
     """Goal-based synthetic time-series environment driven by a channel specification."""
+
     def __init__(
         self,
         config_file: Optional[Path | str] = None,
@@ -47,10 +48,7 @@ class CCBenchEnv(GoalEnv):
         """
         super().__init__(*args, **kwargs)
         if config_file is None and config_dict is None:
-            config_file = (
-                Path(__file__).resolve().parents[3]
-                / "resources/envs/ccbench/config/ccbench_default.yaml"
-            )
+            config_file = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config/ccbench_default.yaml"
         config = load_config(config_file=config_file, config_dict=config_dict)
 
         process_spec = config.get("process_spec")
@@ -111,7 +109,8 @@ class CCBenchEnv(GoalEnv):
         state_space: Dict[str, gym.spaces.Space] = {
             k: get_box_space(k)
             for k in (list(self.process_spec.keys()) + list(self.target_obj_map.values()))
-            if (k not in self.action_control_map or self.action_control_map[k] is None) and (k not in self.target_obj_map.values())
+            if (k not in self.action_control_map or self.action_control_map[k] is None)
+            and (k not in self.target_obj_map.values())
         }
         self.observation_space = gym.spaces.Dict(
             {
@@ -159,7 +158,7 @@ class CCBenchEnv(GoalEnv):
                 If provided, `episode_start` is derived from its index.
         """
         super().reset(seed=seed, options=dict(options) if options is not None else None)
-        
+
         self.step_count = 0
 
         # find specified or suitable episode start timestamp
@@ -332,10 +331,8 @@ class CCBenchEnv(GoalEnv):
         observation["achieved_goal"] = goal_values
         observation["desired_goal"] = self.desired_goal
         reward = self.compute_reward(achieved_goal=goal_values, desired_goal=self.desired_goal, info=info)
-        
-        terminated = (
-            self.step_count >= self.max_episode_steps if self.max_episode_steps is not None else False
-        )
+
+        terminated = self.step_count >= self.max_episode_steps if self.max_episode_steps is not None else False
 
         cur_ts = self.cur_timestep
         self.next_timestep = cur_ts + self.timestep_size
@@ -455,6 +452,11 @@ def create_ccbench_env(**kwargs) -> CCBenchEnv:
     """Factory function to create real cartpole environment with specified config."""
 
     return CCBenchEnv(
-        config_file=Path(__file__).resolve().parents[3] / "resources" / "envs" / "ccbench" / "config" / "ccbench_default.yaml",
-        **kwargs
+        config_file=Path(__file__).resolve().parents[3]
+        / "resources"
+        / "envs"
+        / "ccbench"
+        / "config"
+        / "ccbench_default.yaml",
+        **kwargs,
     )

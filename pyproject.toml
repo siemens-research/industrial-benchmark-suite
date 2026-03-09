@@ -32,20 +32,66 @@ tqdm = "*"
 typer = "*"
 
 [tool.poetry.group.dev.dependencies]
-black = "*"
-isort = "*"
+mypy = "*"
+pre-commit = "*"
+pre-commit-hooks = "*"
+pytest = "*"
+pytest-cov = "*"
+ruff = "*"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
 mkdocs = "*"
 mkdocs-jupyter = "*"
 mkdocs-material = "*"
 mkdocstrings = "*"
 mkdocstrings-python-legacy = "*"
 pymdown-extensions = "*"
-pre-commit = "*"
-pygments = "*"
-pylint = "*"
-pytest = "*"
-pytest-cov = "*"
-pydocstyle = "*"
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.ruff]
+src = ["src"]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["ANN", "COM812", "D107", "ISC001"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.flake8-type-checking]
+strict = true
+
+[tool.ruff.lint.per-file-ignores]
+"test/**" = ["S101"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["ibs"]
+
+[tool.coverage.paths]
+source = ["ibs"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.isort]
 profile = "black"

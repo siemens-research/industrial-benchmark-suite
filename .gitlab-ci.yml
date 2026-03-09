@@ -1,0 +1,27 @@
+stages:
+  - test
+#  - deploy
+
+variables:
+  http_proxy: $CODE_PROXY
+  https_proxy: $CODE_PROXY
+  no_proxy: $CODE_NO_PROXY
+
+default:
+  interruptible: true
+  tags:
+    - DOCKER
+
+# Merge request pipeline
+# https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html
+workflow:
+  name: $CI_WORKFLOW_NAME
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_TAG
+      variables:
+        CI_WORKFLOW_NAME: Release $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+include:
+  - local: .gitlab/ci/main.yml
