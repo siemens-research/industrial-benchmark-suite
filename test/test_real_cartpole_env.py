@@ -40,7 +40,7 @@ def test_env_fixed_init_with_policy():
         model_input_buffer = info["model_input_buffer"]
         step_count += 1
 
-    assert np.isclose(np.sum(rewards), -3.636, atol=0.01)
+    assert np.isclose(np.sum(rewards), -3.636, atol=0.001)
 
 
 def test_env_from_data_init():
