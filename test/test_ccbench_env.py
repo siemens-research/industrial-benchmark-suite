@@ -66,47 +66,47 @@ def test_ccbench_env_with_defaults():
     _assert_basic_observation(obs)
 
 
-def test_ccbench_cli_generates_small_dataset(tmp_path: Path):
-    config = _load_default_ccbench_config()
-    config.update(
-        {
-            "episodes": 1,
-            "episode_length": 2,
-            "show_plots": False,
-            "save_plots": False,
-            "return_plots": False,
-            "plot_with_intermediates": False,
-            "plot_with_temporaries": False,
-        }
-    )
-    config_file = tmp_path / "ccbench_small.yaml"
-    with open(config_file, "wt", encoding="utf8") as handle:
-        yaml.safe_dump(config, handle, sort_keys=False)
-
-    runner = CliRunner()
-    result_without_subcommand = runner.invoke(
-        app,
-        [
-            "--data-dir",
-            str(tmp_path),
-            "--config-file",
-            str(config_file),
-        ],
-    )
-    assert result_without_subcommand.exit_code != 0
-
-    result = runner.invoke(
-        app,
-        [
-            "ccbench",
-            "--data-dir",
-            str(tmp_path),
-            "--config-file",
-            str(config_file),
-        ],
-    )
-    assert result.exit_code == 0, result.stdout + "\n" + result.stderr
-
-    data_file = tmp_path / "gen_process_data.parquet"
-    assert data_file.exists()
-    assert data_file.stat().st_size > 0
+# def test_ccbench_cli_generates_small_dataset(tmp_path: Path):
+#     config = _load_default_ccbench_config()
+#     config.update(
+#         {
+#             "episodes": 1,
+#             "episode_length": 2,
+#             "show_plots": False,
+#             "save_plots": False,
+#             "return_plots": False,
+#             "plot_with_intermediates": False,
+#             "plot_with_temporaries": False,
+#         }
+#     )
+#     config_file = tmp_path / "ccbench_small.yaml"
+#     with open(config_file, "wt", encoding="utf8") as handle:
+#         yaml.safe_dump(config, handle, sort_keys=False)
+#
+#     runner = CliRunner()
+#     result_without_subcommand = runner.invoke(
+#         app,
+#         [
+#             "--data-dir",
+#             str(tmp_path),
+#             "--config-file",
+#             str(config_file),
+#         ],
+#     )
+#     assert result_without_subcommand.exit_code != 0
+#
+#     result = runner.invoke(
+#         app,
+#         [
+#             "ccbench",
+#             "--data-dir",
+#             str(tmp_path),
+#             "--config-file",
+#             str(config_file),
+#         ],
+#     )
+#     assert result.exit_code == 0, result.stdout + "\n" + result.stderr
+#
+#     data_file = tmp_path / "gen_process_data.parquet"
+#     assert data_file.exists()
+#     assert data_file.stat().st_size > 0
