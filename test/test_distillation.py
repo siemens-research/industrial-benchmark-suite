@@ -9,9 +9,7 @@ from ibs.envs.distillation.distillation_env import DEFAULT_CONFIG, DistillationE
 
 MAX_EPISODE_STEPS = 10
 
-PATH_TO_POLICY_MODEL = resolve_path(
-    "../resources/envs/distillation/policy_models/run_33/checkpoint_000020", __file__
-)
+PATH_TO_POLICY_MODEL = resolve_path("../resources/envs/distillation/policy_models/run_33/checkpoint_000020", __file__)
 POLICY_BUFFER_SIZE = 20
 
 

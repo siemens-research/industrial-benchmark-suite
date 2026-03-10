@@ -3,9 +3,7 @@
 from pathlib import Path
 
 import yaml
-from typer.testing import CliRunner
 
-from ibs.__main__ import app
 from ibs.envs.ccbench.ccbench_env import CCBenchEnv
 
 

@@ -15,9 +15,7 @@ def test_env_fixed_init_with_policy():
         init_method="fixed",
         max_episode_length=10,
     )
-    PATH_TO_POLICY_MODEL = resolve_path(
-        "../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__
-    )
+    PATH_TO_POLICY_MODEL = resolve_path("../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__)
     POLICY_BUFFER_SIZE = 12
     policy_model = tf.saved_model.load(PATH_TO_POLICY_MODEL)
 
