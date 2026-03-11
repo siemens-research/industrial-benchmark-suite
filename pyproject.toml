@@ -28,7 +28,7 @@ pandas = "*"
 pyarrow = "*"
 pyyaml = ">=5.3"
 scipy = "*"
-tensorflow = "<2.20"  # avoid current runtime issue with pyarrow and tensorflow==2.20
+tensorflow = ">2.20"  # avoid current runtime issue with pyarrow and tensorflow==2.20
 tqdm = "*"
 typer = "*"
 
