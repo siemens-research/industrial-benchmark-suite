@@ -12,7 +12,7 @@ ENV_ID = "FourTank-v0"
 NUM_EPISODES = 5
 MAX_EPISODE_STEPS = 100
 INIT_METHOD = "from_data"
-RENDER_SCENE = False
+RENDER_SCENE = True
 
 PATH_TO_POLICY_MODEL = resolve_path("../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__)
 POLICY_BUFFER_SIZE = 12
@@ -42,8 +42,8 @@ if __name__ == "__main__":
             rewards.append(reward)
             infos.append(info)
             model_input_buffer = info["model_input_buffer"]
-            # if RENDER_SCENE:
-            #     env.render()
+            if RENDER_SCENE:
+                env.render()
             step_count += 1
 
         res = np.concatenate(

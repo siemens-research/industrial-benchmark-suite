@@ -42,8 +42,8 @@ if __name__ == "__main__":
             rewards.append(reward)
             infos.append(info)
             model_input_buffer = info["model_input_buffer"]
-            # if RENDER_SCENE:
-            #     env.render()
+            if RENDER_SCENE:
+                env.render()
             step_count += 1
 
         res = np.concatenate(

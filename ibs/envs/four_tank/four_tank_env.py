@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
@@ -100,6 +101,11 @@ class FourTankEnv(gym.Env):
     Depending on the config field 'max_episode_steps', the episode is either terminated when the
     maximum step limit is reached or is run infinitely (default).
     """
+
+    metadata = {
+        "render_modes": ["human"],
+        "render_fps": 30,
+    }
 
     obs_names = [
         "Inlet Valve Tank 1",
@@ -210,6 +216,96 @@ class FourTankEnv(gym.Env):
 
         self.render_mode = self.config.get("render_mode", "human")
 
+        # Initialise matplotlib figure and all artists upfront so render() stays lean
+        self._init_render()
+
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
+
+    def _init_render(self):
+        """Create the matplotlib figure, axes, and line artists used by render().
+
+        All observations are displayed in individual subplots sharing the x-axis.
+        Where an obs_objectives_mapping entry exists the corresponding objective
+        is drawn as a dashed tomato-coloured line in the same subplot so that
+        tracking performance is immediately visible.  Axes y-limits are set from
+        obs_limits.  All plot chrome (spines, tick params, grid, margins) is
+        configured here once so that render() only has to update line data.
+        """
+        # Number of subplots = number of obs variables that are NOT pure objective
+        # entries (objectives share the subplot of their paired state variable)
+        objective_set = set(self.objective_names)
+        self._render_obs_indices = [i for i, name in enumerate(self.obs_names) if name not in objective_set]
+        n_plots = len(self._render_obs_indices)
+
+        self._render_fig, self._render_axes = plt.subplots(
+            n_plots,
+            1,
+            sharex=True,
+            figsize=(14, 1.4 * n_plots),
+            gridspec_kw={"hspace": 0.05},
+            constrained_layout=True,
+        )
+        self._render_fig.suptitle("Four-Tank Environment", fontsize=11)
+
+        # Ensure axes is always a list even for n_plots == 1
+        if n_plots == 1:
+            self._render_axes = [self._render_axes]
+
+        self._render_state_lines = []  # one per subplot
+        self._render_obj_lines = []  # one per subplot (None if no objective)
+        self._render_history = []  # list of state vectors appended each step
+
+        for ax, obs_idx in zip(self._render_axes, self._render_obs_indices):
+            obs_name = self.obs_names[obs_idx]
+            ymin, ymax = self.obs_limits[obs_idx]
+
+            # State variable line
+            (state_line,) = ax.plot([], [], color="C0", linewidth=1.2, label=obs_name)
+            ax.set_ylabel(obs_name, fontsize=7, labelpad=3)
+            ax.set_ylim(ymin - 0.05 * (ymax - ymin), ymax + 0.05 * (ymax - ymin))
+            ax.tick_params(labelsize=7)
+            ax.grid(True, alpha=0.35, linewidth=0.5)
+            for spine in ("top", "right"):
+                ax.spines[spine].set_visible(False)
+
+            # Objective line (dashed tomato) if a mapping exists for this obs
+            obj_line = None
+            if obs_name in self.obs_objectives_mapping:
+                obj_obs_name = self.obs_objectives_mapping[obs_name]
+                (obj_line,) = ax.plot(
+                    [],
+                    [],
+                    color="tomato",
+                    linewidth=1.0,
+                    linestyle="--",
+                    label=obj_obs_name,
+                )
+                ax.legend(
+                    loc="upper left",
+                    fontsize=6,
+                    framealpha=0.5,
+                    borderpad=0.3,
+                    handlelength=1.2,
+                    handletextpad=0.4,
+                )
+            else:
+                ax.legend(
+                    loc="upper left",
+                    fontsize=6,
+                    framealpha=0.5,
+                    borderpad=0.3,
+                    handlelength=1.2,
+                    handletextpad=0.4,
+                )
+
+            self._render_state_lines.append(state_line)
+            self._render_obj_lines.append(obj_line)
+
+        self._render_axes[-1].set_xlabel("Step", fontsize=8)
+        plt.ion()
+
     def step(self, action):
         """Iterate simulated DAL 4-tank benchmark process by one step using pre-trained dynamics model.
 
@@ -283,6 +379,10 @@ class FourTankEnv(gym.Env):
         )
 
     def reset(self, seed=None, options=None):
+        # Close the old canvas and create a fresh one for the new episode
+        plt.close(self._render_fig)
+        self._init_render()
+
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(self.config["fixed_init_observation"], dtype=np.float32)
             for _ in range(self.observation_buffer_size):
@@ -313,10 +413,45 @@ class FourTankEnv(gym.Env):
             else:
                 raise ValueError(f"Objective variable {obj_var} not found in state variables.")
 
-    def render(self, mode="human"):
-        """Render the environment (currently a no-op placeholder)."""
-        # TODO: Implement rendering of the 4-tank system state (e.g., using matplotlib or a custom visualization)
-        pass
+    def render(self):
+        """Update the live matplotlib visualisation with the current environment state.
+
+        All figure geometry and artist objects are created once in _init_render()
+        (called from __init__); this method only pushes new data into the existing
+        line artists and redraws, keeping invocation overhead minimal.
+        """
+        if self.state is None:
+            return
+
+        # Accumulate history
+        self._render_history.append(self.state.copy())
+        data = np.array(self._render_history)  # shape (T, n_obs)
+        x = np.arange(data.shape[0])
+
+        for ax, obs_idx, state_line, obj_line in zip(
+            self._render_axes,
+            self._render_obs_indices,
+            self._render_state_lines,
+            self._render_obj_lines,
+        ):
+            state_line.set_data(x, data[:, obs_idx])
+            ax.set_xlim(0, max(10, len(self._render_history)))
+
+            if obj_line is not None:
+                obs_name = self.obs_names[obs_idx]
+                obj_obs_name = self.obs_objectives_mapping[obs_name]
+                obj_idx = self.obs_names.index(obj_obs_name)
+                obj_line.set_data(x, data[:, obj_idx])
+                # Zoom y-axis around the current objective ± margin
+                current_obj = data[-1, obj_idx]
+                margin = 3.0
+                ymin_lim = max(self.obs_limits[obj_idx, 0], current_obj - margin)
+                ymax_lim = min(self.obs_limits[obj_idx, 1], current_obj + margin)
+                if ymax_lim > ymin_lim:
+                    ax.set_ylim(ymin_lim, ymax_lim)
+
+        self._render_fig.canvas.draw_idle()
+        self._render_fig.canvas.flush_events()
 
 
 def create_four_tank_env(**kwargs) -> FourTankEnv:
