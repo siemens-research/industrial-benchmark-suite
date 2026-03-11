@@ -25,9 +25,10 @@ gymnasium = {version=">=0.26.1", extras=["classic-control"]}
 matplotlib = "*"
 numpy = "*"
 pandas = "*"
+pyarrow = "*"
 pyyaml = ">=5.3"
 scipy = "*"
-tensorflow = "*"
+tensorflow = "<2.20"  # avoid current runtime issue with pyarrow and tensorflow==2.20
 tqdm = "*"
 typer = "*"
 

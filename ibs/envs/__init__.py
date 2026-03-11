@@ -1,0 +1,31 @@
+"""Register pre-configured environments as benchmarks."""
+
+from gymnasium.envs.registration import register
+
+from ibs.envs.real_cartpole.real_cartpole_env import RealCartPoleEnv
+from ibs.envs.four_tank.four_tank_env import FourTankEnv
+from ibs.envs.distillation.distillation_env import DistillationEnv
+from ibs.envs.ccbench.ccbench_env import CCBenchEnv
+from ibs.envs.ccbench.generate_data import generate_data
+
+__all__ = ["RealCartPoleEnv", "FourTankEnv", "DistillationEnv", "CCBenchEnv", "generate_data"]
+
+register(
+    id="RealCartPole-v0",
+    entry_point="ibs.envs.real_cartpole.real_cartpole_env:create_real_cartpole_env",
+)
+
+register(
+    id="FourTank-v0",
+    entry_point="ibs.envs.four_tank.four_tank_env:create_four_tank_env",
+)
+
+register(
+    id="Distillation-v0",
+    entry_point="ibs.envs.distillation.distillation_env:create_distillation_env",
+)
+
+register(
+    id="CCBench-v0",
+    entry_point="ibs.envs.ccbench.ccbench_env:create_ccbench_env",
+)
