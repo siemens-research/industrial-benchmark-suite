@@ -168,9 +168,9 @@ class DistillationEnv(gym.Env):
         self.reset_count = 0
 
         if self.config["init_method"] == "from_data":
-            assert resolve_path(
-                self.config["init_data_file"], __file__
-            ).exists(), "Initial observation samples file does not exist."
+            assert resolve_path(self.config["init_data_file"], __file__).exists(), (
+                "Initial observation samples file does not exist."
+            )
             self.initial_observations = np.loadtxt(
                 resolve_path(self.config["init_data_file"], __file__),
                 delimiter=",",
@@ -253,18 +253,12 @@ class DistillationEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         if self.config["init_method"] == "fixed":
-            initial_observation_vector = np.array(
-                self.config["fixed_init_observation"], dtype=np.float32
-            )
+            initial_observation_vector = np.array(self.config["fixed_init_observation"], dtype=np.float32)
             for _ in range(self.observation_buffer_size):
-                self._model_input_buffer.append(
-                    initial_observation_vector
-                )
+                self._model_input_buffer.append(initial_observation_vector)
             self.state = initial_observation_vector
         elif self.config["init_method"] == "from_data":
-            initial_model_inputs = self.initial_observations[
-                self.reset_count % len(self.initial_observations)
-            ]
+            initial_model_inputs = self.initial_observations[self.reset_count % len(self.initial_observations)]
             initial_model_inputs_reshaped = initial_model_inputs.reshape(
                 -1, initial_model_inputs.shape[0] // self.observation_buffer_size
             )
@@ -284,7 +278,6 @@ class DistillationEnv(gym.Env):
         """Update the current objectives based on the provided new objectives."""
         for obj_var, new_value in new_objectives.items():
             if obj_var in self.obs_names:
-                index = self.obs_names.index(obj_var)
                 self.current_objectives[self.objective_names.index(obj_var)] = new_value
             else:
                 raise ValueError(f"Objective variable {obj_var} not found in state variables.")

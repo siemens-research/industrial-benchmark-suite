@@ -1,7 +1,6 @@
 """Example of how to run the real-cartpole benchmark using a pre-trained MOOSE policy."""
 
 import time
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,7 +8,6 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from gymnasium.envs.registration import make
 
-import ibs.envs.real_cartpole
 from ibs.common.utils import resolve_path
 
 ENV_ID = "RealCartPole-v0"
@@ -19,8 +17,7 @@ INIT_METHOD = "from_data"  # "fixed" or "from_data"
 RENDER_SCENE = True
 
 PATH_TO_POLICY_MODEL = resolve_path(
-    "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_8/"
-    "checkpoint_000020", __file__
+    "../resources/envs/real_cartpole/policy_models/moose_realcartpole_upswing_linux_8/checkpoint_000020", __file__
 )
 POLICY_BUFFER_SIZE = 10
 
@@ -59,10 +56,7 @@ if __name__ == "__main__":
 
         t_stop = time.time()
         duration = t_stop - t_start
-        print(
-            f"Total execution time for {step_count} steps: "
-            f"{duration:.2f}s ({duration / step_count:.3f}s per step)"
-        )
+        print(f"Total execution time for {step_count} steps: {duration:.2f}s ({duration / step_count:.3f}s per step)")
 
         res = np.concatenate(
             [

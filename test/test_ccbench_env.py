@@ -1,19 +1,16 @@
 """Tests for the CCBench environment and CLI."""
 
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
-from typer.testing import CliRunner
 
-from ibs.__main__ import app
 from ibs.envs.ccbench.ccbench_env import CCBenchEnv
 
 
 def _load_default_ccbench_config() -> dict:
-    config_path = (
-        Path(__file__).resolve().parents[1]
-        / "resources/envs/ccbench/config/ccbench_default.yaml"
-    )
+    config_path = Path(__file__).resolve().parents[1] / "resources/envs/ccbench/config/ccbench_default.yaml"
     with open(config_path, "rt", encoding="utf8") as handle:
         return yaml.safe_load(handle)
 
@@ -86,29 +83,37 @@ def test_ccbench_cli_generates_small_dataset(tmp_path: Path):
     with open(config_file, "wt", encoding="utf8") as handle:
         yaml.safe_dump(config, handle, sort_keys=False)
 
-    runner = CliRunner()
-    result_without_subcommand = runner.invoke(
-        app,
-        [
+    # Run CLI in a subprocess to avoid sys.stdout/sys.stderr file handle conflicts
+    # that arise when tqdm and logging.StreamHandler still hold references to the
+    # CliRunner's closed capture buffers after invoke() returns.
+    base_cmd = [sys.executable, "-m", "ibs"]
+
+    result_without_subcommand = subprocess.run(
+        base_cmd
+        + [
             "--data-dir",
             str(tmp_path),
             "--config-file",
             str(config_file),
         ],
+        capture_output=True,
+        text=True,
     )
-    assert result_without_subcommand.exit_code != 0
+    assert result_without_subcommand.returncode != 0
 
-    result = runner.invoke(
-        app,
-        [
+    result = subprocess.run(
+        base_cmd
+        + [
             "ccbench",
             "--data-dir",
             str(tmp_path),
             "--config-file",
             str(config_file),
         ],
+        capture_output=True,
+        text=True,
     )
-    assert result.exit_code == 0, result.stdout + "\n" + result.stderr
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
 
     data_file = tmp_path / "gen_process_data.parquet"
     assert data_file.exists()

@@ -9,7 +9,6 @@ import copy
 import numpy as np
 
 
-
 def is_sequence(arg):
     """Indicate whether arg is a sequence, but not a string."""
     if arg is None:
@@ -24,7 +23,7 @@ def is_sequence(arg):
 def addtodict(d, d2={}, **kwargs):
     """
     Add the elements of the provided 'd2' dict and/or the provided keyword arguments to a copy of the dict 'd'.
-    
+
     A modified copy is returned.
     """
     d = copy.copy(d)
@@ -35,7 +34,7 @@ def addtodict(d, d2={}, **kwargs):
 class DictNamespace(dict):
     """
     Extend dicts by allowing access to their values by attribute notation.
-    
+
     >>> d = DictNamespace()
     >>> d["a"] = 1
     >>> d.a
@@ -44,6 +43,7 @@ class DictNamespace(dict):
     >>> d["b"]
     -> 2
     """
+
     # pylint: disable=too-many-instance-attributes
     def __getattr__(self, name):
         """Return dict element `name` (for names not already defined on dict)."""

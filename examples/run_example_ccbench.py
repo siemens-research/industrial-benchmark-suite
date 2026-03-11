@@ -35,7 +35,7 @@ if __name__ == "__main__":
         while not terminated:
             action = env.action_space.sample()
             action = {k: action[k] if np.random.rand() >= KEEP_ACTIONS_ZERO_PERCENTAGE else 0.0 for k in action}
-            
+
             obs, reward, terminated, _, info = env.step(action)
             # obs and action are dictionaries, so we store them as they are for now and will convert to DataFrame later
             observations.append(obs)
@@ -47,18 +47,23 @@ if __name__ == "__main__":
             step_count += 1
 
         df_observations = pd.DataFrame(map(lambda el: el["observation"], observations))
-        df_goals = pd.DataFrame(map(lambda el: el["desired_goal"], observations)).rename(columns=env.unwrapped.target_obj_map)
+        df_goals = pd.DataFrame(map(lambda el: el["desired_goal"], observations)).rename(
+            columns=env.unwrapped.target_obj_map
+        )
         df_actions = pd.DataFrame(actions)
         df_rewards = pd.Series(rewards, name="Reward")
 
         df_env = pd.concat([df_observations, df_goals, df_actions, df_rewards], axis=1)
 
         # Group observations and objectives according to env.unwrapped.target_obj_map
-        observation_names = list(env.unwrapped.observation_space["observation"].spaces.keys()) # pyright: ignore[reportIndexIssue]
+        observation_names = list(env.unwrapped.observation_space["observation"].spaces.keys())  # pyright: ignore[reportIndexIssue]
         axes = df_env[
-            [obs for obs in observation_names
-             if obs not in env.unwrapped.target_obj_map.values() and obs not in env.unwrapped.temp_channels
-            ] + ["Reward"]
+            [
+                obs
+                for obs in observation_names
+                if obs not in env.unwrapped.target_obj_map.values() and obs not in env.unwrapped.temp_channels
+            ]
+            + ["Reward"]
         ].plot(subplots=True, figsize=(12, 10))
         for obs, obj in env.unwrapped.target_obj_map.items():
             if obs in df_env.columns and obj in df_env.columns:
