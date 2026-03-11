@@ -48,4 +48,3 @@ Depending on the config field 'init_method', the starting state is either drawn 
 ### Episode End
 
 Depending on the config field 'max_episode_steps', the episode is either terminated when the maximum step limit is reached or is run infinitely.
-

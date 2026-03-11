@@ -1,0 +1,138 @@
+stages:
+  - test
+#  - deploy
+
+variables:
+  http_proxy: $CODE_PROXY
+  https_proxy: $CODE_PROXY
+  no_proxy: $CODE_NO_PROXY
+  POETRY_VERSION: "2.0"
+
+#default:
+#  interruptible: true
+#  tags:
+#    - DOCKER
+
+## Merge request pipeline
+## https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html
+#workflow:
+#  name: $CI_WORKFLOW_NAME
+#  rules:
+#    - if: $CI_MERGE_REQUEST_IID
+#    - if: $CI_COMMIT_TAG
+#      variables:
+#        CI_WORKFLOW_NAME: Release $CI_COMMIT_TAG
+#    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+tests:
+  stage: test
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py${PYTHON_VERSION}
+  before_script:
+    - poetry install
+  script:
+    - poetry run pytest --junitxml=.pytest-junit-report.xml --cov-report xml:coverage.xml
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: .pytest-junit-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+pre-commit:
+  stage: test
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py${PYTHON_VERSION}
+  variables:
+    PRE_COMMIT_HOME: $CI_PROJECT_DIR/.cache/pre-commit
+    RUFF_OUTPUT_FILE: .gitlab-code-quality-report.json
+    RUFF_OUTPUT_FORMAT: gitlab
+  before_script:
+    - poetry install
+  script:
+    - poetry run pre-commit run --all-files --show-diff-on-failure
+  cache:
+    key:
+      prefix: pre-commit
+      files:
+        - .pre-commit-config.yaml
+    paths:
+      - .cache/pre-commit
+  artifacts:
+    reports:
+      codequality: .gitlab-code-quality-report.json
+
+#security:
+#  stage: test
+#  image:
+#    name: aquasec/trivy:0.59.0
+#    entrypoint: [""]
+#  script:
+#    # scan twice to have console output and junit, see https://github.com/aquasecurity/trivy/issues/720
+#    - trivy fs --no-progress --ignore-unfixed --exit-code 0 $CI_PROJECT_DIR
+#    - trivy fs --no-progress --ignore-unfixed --exit-code 1 --format template --template @/contrib/junit.tpl -o junit-trivy.xml $CI_PROJECT_DIR
+#  allow_failure: true
+#  artifacts:
+#    paths:
+#      - junit-trivy.xml
+#    reports:
+#      junit: junit-trivy.xml
+
+#package:
+#  stage: deploy
+#  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py3.11
+#  variables:
+#    POETRY_HTTP_BASIC_UPLOAD_USERNAME: gitlab-ci-token
+#    POETRY_HTTP_BASIC_UPLOAD_PASSWORD: $CI_JOB_TOKEN
+#  before_script:
+#    - poetry config repositories.upload ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
+#  script:
+#    - poetry version "${CI_COMMIT_TAG:1}"
+#    - poetry build
+#    - poetry publish -r upload -n
+#  rules:
+#    - if: $CI_COMMIT_TAG =~ /^v([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|rc)(0|[1-9][0-9]*))?(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?$/
+
+#.docs:
+#  stage: deploy
+#  image: ${CI_REGISTRY}/code-ops/poetry-docker:${POETRY_VERSION}-py3.11
+#  before_script:
+#    - poetry install --only docs
+#  script:
+#    - poetry run mkdocs build --site-dir public ${CI_MERGE_REQUEST_IID+--no-directory-urls}
+#  artifacts:
+#    paths:
+#      - public
+#
+#pages:review:
+#  extends: .docs
+#  after_script:
+#    - echo "REVIEW_URL=${CI_PAGES_URL%%://*}://${CI_PROJECT_ROOT_NAMESPACE}.${CI_PAGES_DOMAIN}/-/${CI_PROJECT_PATH#*/}/-/jobs/${CI_JOB_ID}/artifacts/public/index.html" > review.env
+#  artifacts:
+#    reports:
+#      dotenv: review.env
+#  environment:
+#    name: review/$CI_MERGE_REQUEST_IID
+#    url: $REVIEW_URL
+#  rules:
+#    - if: $CI_MERGE_REQUEST_IID
+#
+#pages:
+#  extends: .docs
+#  environment:
+#    name: production
+#    url: $CI_PAGES_URL
+#  rules:
+#    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
