@@ -12,7 +12,7 @@ ENV_ID = "FourTank-v0"
 NUM_EPISODES = 5
 MAX_EPISODE_STEPS = 100
 INIT_METHOD = "from_data"
-RENDER_SCENE = True
+RENDER_SCENE = False
 
 PATH_TO_POLICY_MODEL = resolve_path("../resources/envs/four_tank/policy_models/run_05/checkpoint_000020", __file__)
 POLICY_BUFFER_SIZE = 12
@@ -42,6 +42,10 @@ if __name__ == "__main__":
             rewards.append(reward)
             infos.append(info)
             model_input_buffer = info["model_input_buffer"]
+            reward_from_models = info["reward_from_models"]
+            print(
+                f"Compare reward vs reward from models: {reward}, {reward_from_models}, {reward - reward_from_models}"
+            )
             if RENDER_SCENE:
                 env.render()
             step_count += 1
@@ -54,7 +58,9 @@ if __name__ == "__main__":
             ],
             axis=1,
         )
-        df_env = pd.DataFrame(res, columns=env.unwrapped.obs_names + env.unwrapped.actions_names + ["Reward"])
+        df_env = pd.DataFrame(
+            res, columns=env.unwrapped.obs_names + ["Action: " + a for a in env.unwrapped.actions_names] + ["Reward"]
+        )
 
         # Group observations and objectives according to env.unwrapped.obs_objectives_mapping
         axes = df_env[

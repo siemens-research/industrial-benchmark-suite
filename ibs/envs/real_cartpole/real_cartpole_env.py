@@ -240,7 +240,7 @@ class RealCartPoleEnv(gym.Env):
 
         self.state = self._model_output_vector_to_observation(mean_next_state_from_models)
 
-        reward = self.compute_reward(self.state)
+        reward = self._compute_reward()
 
         self.step_count += 1
 
@@ -281,12 +281,11 @@ class RealCartPoleEnv(gym.Env):
 
         return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
-    @staticmethod
-    def compute_reward(obs):
-        """Compute default benchmark reward based on current observation."""
-        pos_x = obs[0]
-        angle = obs[2] * 180.0 / np.pi
-        angle_vel = obs[3] * 180.0 / np.pi
+    def _compute_reward(self):
+        """Compute default benchmark reward based on current state information."""
+        pos_x = self.state[0]
+        angle = self.state[2] * 180.0 / np.pi
+        angle_vel = self.state[3] * 180.0 / np.pi
 
         reward = 0.01 * (
             -min(abs(pos_x - 325.0) / 10.0, 30.0)
@@ -437,11 +436,22 @@ class RealCartPoleEnv(gym.Env):
             return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
 
 
-def create_real_cartpole_env(**kwargs) -> RealCartPoleEnv:
-    """Factory function to create real cartpole environment with specified config."""
+def create_real_cartpole_env_v0(**kwargs) -> RealCartPoleEnv:
+    """Factory function to create real cartpole environment v0 (default)."""
 
-    config = {**DEFAULT_CONFIG_LSTM}
-    # config = {**DEFAULT_CONFIG_MLP}
+    config = {
+        "tf_models_dir": "../../../resources/envs/real_cartpole/dynamic_models/lstm_2025-05-30",
+        "tf_model_names": [
+            "model_1",
+            "model_2",
+            "model_3",
+            "model_4",
+        ],
+        "observation_buffer_size": 10,
+        "init_method": "from_data",
+        "init_data_file": "../../../resources/envs/real_cartpole/data_recordings/initial_observation_samples__2024-02-01_15-10-13__buffersize_10.csv",
+        "max_episode_length": 500,
+    }
     config.update(kwargs)
 
     return RealCartPoleEnv(config)

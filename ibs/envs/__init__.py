@@ -12,7 +12,7 @@ __all__ = ["RealCartPoleEnv", "FourTankEnv", "DistillationEnv", "CCBenchEnv", "g
 
 register(
     id="RealCartPole-v0",
-    entry_point="ibs.envs.real_cartpole.real_cartpole_env:create_real_cartpole_env",
+    entry_point="ibs.envs.real_cartpole.real_cartpole_env:create_real_cartpole_env_v0",
 )
 
 register(
