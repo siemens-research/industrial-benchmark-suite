@@ -123,11 +123,11 @@ class FourTankEnv(gym.Env):
     ]
 
     actions_names = [
-        "Control Valve 1",
-        "Control Valve 2",
-        "Control Valve 3",
-        "Control Valve 1-2",
-        "Control Valve 3-4",
+        "Inlet Valve Tank 1",
+        "Inlet Valve Tank 2",
+        "Inlet Valve Tank 3",
+        "Connecting Valve Tank 1-2",
+        "Connecting Valve Tank 3-4",
     ]
 
     objective_names = [
@@ -216,8 +216,8 @@ class FourTankEnv(gym.Env):
 
         self.render_mode = self.config.get("render_mode", "human")
 
-        # Initialise matplotlib figure and all artists upfront so render() stays lean
-        self._init_render()
+        # Render resources are created lazily on the first render() call
+        self._render_fig = None
 
     # ------------------------------------------------------------------
     # Rendering
@@ -233,6 +233,9 @@ class FourTankEnv(gym.Env):
         obs_limits.  All plot chrome (spines, tick params, grid, margins) is
         configured here once so that render() only has to update line data.
         """
+        # Ensure interactive mode is enabled before creating figures
+        plt.ion()
+
         # Number of subplots = number of obs variables that are NOT pure objective
         # entries (objectives share the subplot of their paired state variable)
         objective_set = set(self.objective_names)
@@ -304,7 +307,6 @@ class FourTankEnv(gym.Env):
             self._render_obj_lines.append(obj_line)
 
         self._render_axes[-1].set_xlabel("Step", fontsize=8)
-        plt.ion()
 
     def step(self, action):
         """Iterate simulated DAL 4-tank benchmark process by one step using pre-trained dynamics model.
@@ -358,9 +360,10 @@ class FourTankEnv(gym.Env):
 
         # Update internal state representation applying mean over forecast model results
         self._model_input_buffer.append(mean_next_state_from_models)
-
         self.state = mean_next_state_from_models
-        reward = mean_reward_from_models
+
+        # Compute reward signal based on current state and state history
+        reward, reward_components = self._compute_reward()
 
         self.step_count += 1
 
@@ -375,13 +378,23 @@ class FourTankEnv(gym.Env):
             reward,
             terminated,
             False,
-            {"model_input_buffer": list(self._model_input_buffer)},
+            {
+                "model_input_buffer": list(self._model_input_buffer),
+                "reward_components": reward_components,
+                "reward_from_models": mean_reward_from_models,
+            },
         )
 
     def reset(self, seed=None, options=None):
-        # Close the old canvas and create a fresh one for the new episode
-        plt.close(self._render_fig)
-        self._init_render()
+        """Reset the environment to an initial state for a new episode.
+
+        Safely closes the previous render figure if it exists and creates a fresh one
+        on the next render() call.
+        """
+        # Safely close the old render figure if it exists
+        if self._render_fig is not None:
+            plt.close(self._render_fig)
+            self._render_fig = None
 
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(self.config["fixed_init_observation"], dtype=np.float32)
@@ -405,6 +418,46 @@ class FourTankEnv(gym.Env):
 
         return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
+    def _compute_reward(self):
+        """Compute default benchmark reward based on available state (history) information.
+
+        The reward consists of two separate components:
+        1. Setpoint tracking: negative weighted absolute deviation of each level
+           meter from its objective (weights = 1.0 each).
+        2. Action regularization: negative weighted absolute 1-step change of all
+           6 valve observations
+
+        Returns:
+            total_reward: aggregated reward signal
+            reward_components: dictionary of reward contributing components (for logging/analysis purposes)
+        """
+        setpoint_weights = [1.0] * len(self.obs_objectives_mapping)
+        action_reg_weights = [0.001, 0.001, 0.001, 0.01, 0.01]
+
+        # --- setpoint tracking term ---
+        reward_setpoint_components = {}
+        reward_diff_setpoint = 0.0
+        for w, (lv, obj) in zip(setpoint_weights, self.obs_objectives_mapping.items()):
+            diff = -w * np.abs(self.state[self.obs_names.index(lv)] - self.state[self.obs_names.index(obj)])
+            reward_diff_setpoint += diff
+            reward_setpoint_components[lv] = diff
+
+        # --- action regularisation term ---
+        reward_action_reg = 0.0
+        for w, action_name in zip(action_reg_weights, self.actions_names):
+            idx = self.obs_names.index(action_name)
+            diff = -w * np.abs(self._model_input_buffer[-1][idx] - self._model_input_buffer[-2][idx])
+            reward_action_reg += diff
+
+        total_reward = reward_diff_setpoint + reward_action_reg
+
+        reward_components = {
+            **reward_setpoint_components,
+            "action_regularization": reward_action_reg,
+        }
+
+        return total_reward, reward_components
+
     def update_objectives(self, new_objectives: dict):
         """Update the current objectives based on the provided new objectives."""
         for obj_var, new_value in new_objectives.items():
@@ -417,11 +470,16 @@ class FourTankEnv(gym.Env):
         """Update the live matplotlib visualisation with the current environment state.
 
         All figure geometry and artist objects are created once in _init_render()
-        (called from __init__); this method only pushes new data into the existing
-        line artists and redraws, keeping invocation overhead minimal.
+        (called lazily on the first render() invocation); this method only pushes
+        new data into the existing line artists and redraws, keeping invocation
+        overhead minimal.
         """
         if self.state is None:
             return
+
+        # Lazily create the render figure on the first call
+        if self._render_fig is None:
+            self._init_render()
 
         # Accumulate history
         self._render_history.append(self.state.copy())

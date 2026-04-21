@@ -38,7 +38,9 @@ def test_env_fixed_init_with_policy():
         model_input_buffer = info["model_input_buffer"]
         step_count += 1
 
-    assert np.isclose(np.sum(rewards), -1.325, atol=0.001)
+    print(np.sum(rewards))
+
+    assert np.isclose(np.sum(rewards), -1.3220, atol=0.001)
 
 
 def test_env_from_data_init():
@@ -66,3 +68,35 @@ def test_env_from_data_init():
         step_count += 1
 
     assert np.sum(rewards) < 0.0
+
+
+def test_reward_model_vs_computed_deviation():
+    """Test that the reward from learned models deviates no more than 5% from the computed reward."""
+    env = make(
+        "Distillation-v0",
+        init_method="fixed",
+        max_episode_length=MAX_EPISODE_STEPS,
+    )
+    policy_model = tf.saved_model.load(PATH_TO_POLICY_MODEL)
+
+    rewards_computed, rewards_from_models = [], []
+    terminated = False
+    obs, info = env.reset()
+    model_input_buffer = info["model_input_buffer"]
+    while not terminated:
+        policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
+        action = policy_model([policy_input])[0]
+        obs, reward, terminated, _, info = env.step(action)
+        rewards_computed.append(reward)
+        rewards_from_models.append(info["reward_from_models"])
+        model_input_buffer = info["model_input_buffer"]
+
+    total_computed = np.sum(rewards_computed)
+    total_from_models = np.sum(rewards_from_models)
+
+    # Relative deviation should not exceed 5%
+    relative_deviation = np.abs(total_computed - total_from_models) / np.abs(total_computed)
+    assert relative_deviation < 0.01, (
+        f"Relative deviation {relative_deviation:.4f} exceeds 5% "
+        f"(computed={total_computed:.4f}, model={total_from_models:.4f})"
+    )

@@ -185,8 +185,8 @@ class DistillationEnv(gym.Env):
 
         self.render_mode = self.config.get("render_mode", "human")
 
-        # Initialise matplotlib figure and all artists upfront so render() stays lean
-        self._init_render()
+        # Render resources are created lazily on the first render() call
+        self._render_fig = None
 
     # ------------------------------------------------------------------
     # Rendering
@@ -201,6 +201,9 @@ class DistillationEnv(gym.Env):
         the same subplot.  All plot chrome is configured here once so that
         render() only has to update line data.
         """
+        # Ensure interactive mode is enabled before creating figures
+        plt.ion()
+
         objective_set = set(self.objective_names)
         self._render_obs_indices = [i for i, name in enumerate(self.obs_names) if name not in objective_set]
         n_plots = len(self._render_obs_indices)
@@ -259,7 +262,6 @@ class DistillationEnv(gym.Env):
             self._render_obj_lines.append(obj_line)
 
         self._render_axes[-1].set_xlabel("Step", fontsize=8)
-        plt.ion()
 
     def step(self, action):
         """Iterate simulated distillation process by one step using pre-trained dynamics model.
@@ -313,9 +315,10 @@ class DistillationEnv(gym.Env):
 
         # Update internal state representation applying mean over forecast model results
         self._model_input_buffer.append(mean_next_state_from_models)
-
         self.state = mean_next_state_from_models
-        reward = mean_reward_from_models
+
+        # Compute reward signal based on current state and state history
+        reward, reward_components = self._compute_reward()
 
         self.step_count += 1
 
@@ -330,13 +333,23 @@ class DistillationEnv(gym.Env):
             reward,
             terminated,
             False,
-            {"model_input_buffer": list(self._model_input_buffer)},
+            {
+                "model_input_buffer": list(self._model_input_buffer),
+                "reward_components": reward_components,
+                "reward_from_models": mean_reward_from_models,
+            },
         )
 
     def reset(self, seed=None, options=None):
-        # Close the old canvas and create a fresh one for the new episode
-        plt.close(self._render_fig)
-        self._init_render()
+        """Reset the environment to an initial state for a new episode.
+
+        Safely closes the previous render figure if it exists and creates a fresh one
+        on the next render() call.
+        """
+        # Safely close the old render figure if it exists
+        if self._render_fig is not None:
+            plt.close(self._render_fig)
+            self._render_fig = None
 
         if self.config["init_method"] == "fixed":
             initial_observation_vector = np.array(self.config["fixed_init_observation"], dtype=np.float32)
@@ -360,6 +373,40 @@ class DistillationEnv(gym.Env):
 
         return self.state, {"model_input_buffer": list(self._model_input_buffer)}
 
+    def _compute_reward(self):
+        """Compute default benchmark reward based on available state (history) information.
+
+        Returns:
+            total_reward: aggregated reward signal
+            rewards_components: dictionary of reward contributing components (for logging/analysis purposes)
+        """
+        mass_flow = self.state[self.obs_names.index("Mass Flowrate")]
+        water_fraction = self.state[self.obs_names.index("Water Fraction")]
+
+        mass_flow_obj = self.state[self.obs_names.index("Objective Mass Flowrate")]
+        water_fraction_obj = self.state[self.obs_names.index("Objective Water Fraction")]
+
+        action_reflux = self._model_input_buffer[-1][self.obs_names.index("Reflux Ratio")]
+        action_heating = self._model_input_buffer[-1][self.obs_names.index("Input Energy Rate")]
+        past_action_reflux = self._model_input_buffer[-2][self.obs_names.index("Reflux Ratio")]
+        past_action_heating = self._model_input_buffer[-2][self.obs_names.index("Input Energy Rate")]
+
+        reward_mass_flow = -1.0 * np.abs(mass_flow - mass_flow_obj)
+        reward_water_fraction = -1.0 * np.abs(water_fraction - water_fraction_obj)
+        reward_reflux_action = -0.2 * np.abs(action_reflux - past_action_reflux)
+        reward_heating_action = -0.2 * np.abs(action_heating - past_action_heating)
+
+        total_reward = reward_mass_flow + reward_water_fraction + reward_reflux_action + reward_heating_action
+
+        reward_components = {
+            "mass_flow": reward_mass_flow,
+            "water_fraction": reward_water_fraction,
+            "reflux_action": reward_reflux_action,
+            "heat_action": reward_heating_action,
+        }
+
+        return total_reward, reward_components
+
     def update_objectives(self, new_objectives: dict):
         """Update the current objectives based on the provided new objectives."""
         for obj_var, new_value in new_objectives.items():
@@ -372,11 +419,16 @@ class DistillationEnv(gym.Env):
         """Update the live matplotlib visualisation with the current environment state.
 
         All figure geometry and artist objects are created once in _init_render()
-        (called from __init__); this method only pushes new data into the existing
-        line artists and redraws, keeping invocation overhead minimal.
+        (called lazily on the first render() invocation); this method only pushes
+        new data into the existing line artists and redraws, keeping invocation
+        overhead minimal.
         """
         if self.state is None:
             return
+
+        # Lazily create the render figure on the first call
+        if self._render_fig is None:
+            self._init_render()
 
         self._render_history.append(self.state.copy())
         data = np.array(self._render_history)  # shape (T, n_obs)

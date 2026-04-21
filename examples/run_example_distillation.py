@@ -27,6 +27,7 @@ if __name__ == "__main__":
 
     for _ in range(NUM_EPISODES):
         observations, actions, rewards, infos = [], [], [], []
+        rewards_from_models = []
         terminated = False
         obs, info = env.reset()
         model_input_buffer = info["model_input_buffer"]
@@ -51,21 +52,27 @@ if __name__ == "__main__":
                 observations,
                 actions,
                 np.array(rewards).reshape(len(rewards), 1),
+                np.array(rewards_from_models).reshape(len(rewards_from_models), 1),
             ],
             axis=1,
         )
-        df_env = pd.DataFrame(res, columns=env.unwrapped.obs_names + env.unwrapped.actions_names + ["Reward"])
+        df_env = pd.DataFrame(
+            res, columns=env.unwrapped.obs_names + env.unwrapped.actions_names + ["Reward", "Reward (Model)"]
+        )
 
         # Group observations and objectives according to env.unwrapped.obs_objectives_mapping
         axes = df_env[
-            [obs for obs in env.unwrapped.obs_names if obs not in env.unwrapped.objective_names] + ["Reward"]
-        ].plot(subplots=True, figsize=(12, 10))
+            [obs for obs in env.unwrapped.obs_names if obs not in env.unwrapped.objective_names]
+            + ["Reward", "Reward (Model)"]
+        ].plot(subplots=True, figsize=(12, 10), grid=True)
         for obs, obj in env.unwrapped.obs_objectives_mapping.items():
             if obs in df_env.columns and obj in df_env.columns:
                 # Find the subplot index for the objective
                 idx = env.unwrapped.obs_names.index(obs)
                 df_env[obj].plot(ax=axes[idx], label=obj, c="red", linestyle="--")
                 axes[idx].legend()
+                axes[idx].grid(True)
 
+        plt.grid(True)
         plt.tight_layout()
         plt.show()
