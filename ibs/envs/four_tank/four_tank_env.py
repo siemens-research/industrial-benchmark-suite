@@ -85,21 +85,33 @@ class FourTankEnv(gym.Env):
 
     ## Reward Function
 
-    The reward is computed as the sum over the negative absolute deviations of the current water levels
-    in the 3 main tanks from their corresponding objectives (demand levels) minus a regularization term on
-    the action changes (sum of negative absolute value of the 1-step differences over all 3 actions).
-    Hence, the maximum reward is 0, which is achieved when the water levels in all 3 main tanks perfectly
-    match their objectives and no more action changes needed to be applied.
+    The reward at each step is the sum of two components:
+
+    1. Setpoint adherence – the negative absolute deviation of each level meter
+       from its corresponding objective, weighted by 1.0:
+       ``r_setpoint = -1.0 * |Level Meter Tank 1 - Objective Level Tank 1|
+                      -1.0 * |Level Meter Tank 2 - Objective Level Tank 2|
+                      -1.0 * |Level Meter Tank 3 - Objective Level Tank 3|``
+
+    2. Action regularization – a penalty on the 1-step change of each valve
+       observation (weights: 0.001 for inlet valves, 0.01 for connecting valves):
+       ``r_action = -0.001 * |Inlet Valve Tank k(t) - Inlet Valve Tank k(t-1)|  (k=1,2,3)
+                   -0.01  * |Connecting Valve j(t) - Connecting Valve j(t-1)|   (j=1-2,3-4)``
+
+    The total reward is ``r = r_setpoint + r_action``.  The maximum achievable
+    reward is 0, attained when all water levels match their objectives and no
+    valve changes are applied.
 
     ## Starting State
 
-    Depending on the config field 'init_method', the starting state is either drawn as a 'random'
-    sample or set by a 'fixed' sample (as defined by the 'fixed_init_observation' field).
+    Depending on the config option "init_method", the starting state is either drawn from a set list
+    of random initial states ("from_data") or always using the same initial sample provided by the
+    "initial_observation" option ("fixed").
 
     ## Episode End
 
     Depending on the config field 'max_episode_steps', the episode is either terminated when the
-    maximum step limit is reached or is run infinitely (default).
+    maximum step limit is reached (default: 100) or is run infinitely (None).
     """
 
     metadata = {
@@ -422,7 +434,7 @@ class FourTankEnv(gym.Env):
         """Compute default benchmark reward based on available state (history) information.
 
         The reward consists of two separate components:
-        1. Setpoint tracking: negative weighted absolute deviation of each level
+        1. Setpoint adherence: negative weighted absolute deviation of each level
            meter from its objective (weights = 1.0 each).
         2. Action regularization: negative weighted absolute 1-step change of all
            6 valve observations
@@ -434,7 +446,7 @@ class FourTankEnv(gym.Env):
         setpoint_weights = [1.0] * len(self.obs_objectives_mapping)
         action_reg_weights = [0.001, 0.001, 0.001, 0.01, 0.01]
 
-        # --- setpoint tracking term ---
+        # --- Setpoint adherence term ---
         reward_setpoint_components = {}
         reward_diff_setpoint = 0.0
         for w, (lv, obj) in zip(setpoint_weights, self.obs_objectives_mapping.items()):
