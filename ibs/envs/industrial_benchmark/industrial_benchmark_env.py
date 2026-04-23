@@ -40,8 +40,8 @@ from ibs.envs.industrial_benchmark.goldstone import Domain, GoldstoneEnvironment
 # EffectiveAction
 # ---------------------------------------------------------------------------
 
-class EffectiveAction:
 
+class EffectiveAction:
     def __init__(self, velocity: float, gain: float, setpoint: float) -> None:
         self.setpoint = setpoint
         self.effective_velocity = self._calc_effective_velocity(velocity, gain, setpoint)
@@ -86,6 +86,7 @@ class EffectiveAction:
 # BenchmarkState
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BenchmarkState:
     """Typed state representation for the industrial benchmark.
@@ -124,8 +125,14 @@ class BenchmarkState:
     # Ordered list of observable keys for external access
     OBSERVABLE_KEYS: list[str] = field(
         default_factory=lambda: [
-            "setpoint", "velocity", "gain", "shift",
-            "fatigue", "consumption", "cost", "reward",
+            "setpoint",
+            "velocity",
+            "gain",
+            "shift",
+            "fatigue",
+            "consumption",
+            "cost",
+            "reward",
         ],
         repr=False,
     )
@@ -140,29 +147,40 @@ class BenchmarkState:
 
     def observable_array(self) -> NDArray[np.float64]:
         """Return observable state as a flat numpy array."""
-        return np.concatenate([
-            np.array(getattr(self, k)).ravel() for k in self.OBSERVABLE_KEYS
-        ])
+        return np.concatenate([np.array(getattr(self, k)).ravel() for k in self.OBSERVABLE_KEYS])
 
     def full_array(self) -> NDArray[np.float64]:
         """Return the full Markov state as a flat numpy array."""
         all_keys = [
-            "operational_cost_buffer", "current_operational_cost",
-            "fatigue_base", "operational_cost_conv",
-            "hidden_gain", "hidden_velocity", "hidden_shift",
-            "gs_domain", "gs_sys_response", "gs_phi_idx",
-            "effective_gain", "effective_velocity", "miscalibration",
-            "setpoint", "velocity", "gain", "shift",
-            "fatigue", "consumption", "cost", "reward",
+            "operational_cost_buffer",
+            "current_operational_cost",
+            "fatigue_base",
+            "operational_cost_conv",
+            "hidden_gain",
+            "hidden_velocity",
+            "hidden_shift",
+            "gs_domain",
+            "gs_sys_response",
+            "gs_phi_idx",
+            "effective_gain",
+            "effective_velocity",
+            "miscalibration",
+            "setpoint",
+            "velocity",
+            "gain",
+            "shift",
+            "fatigue",
+            "consumption",
+            "cost",
+            "reward",
         ]
-        return np.concatenate([
-            np.array(getattr(self, k)).ravel() for k in all_keys
-        ])
+        return np.concatenate([np.array(getattr(self, k)).ravel() for k in all_keys])
 
 
 # ---------------------------------------------------------------------------
 # IDS – core industrial dynamics system
 # ---------------------------------------------------------------------------
+
 
 class IDS:
     """Lightweight Python implementation of the industrial benchmark.
@@ -190,7 +208,9 @@ class IDS:
 
         self.stationary_p = stationary_p
         self.gs_environment = GoldstoneEnvironment(
-            24, self.max_required_step, self.max_required_step / 2.0,
+            24,
+            self.max_required_step,
+            self.max_required_step / 2.0,
         )
 
         self.state = BenchmarkState()
@@ -238,15 +258,16 @@ class IDS:
         self.state.velocity = np.clip(self.state.velocity + delta[0], 0.0, 100.0)
         self.state.gain = np.clip(self.state.gain + 10 * delta[1], 0.0, 100.0)
         self.state.shift = np.clip(
-            self.state.shift
-            + ((self.max_required_step / 0.9) * 100.0 / self.gs_scale) * delta[2],
-            0.0, 100.0,
+            self.state.shift + ((self.max_required_step / 0.9) * 100.0 / self.gs_scale) * delta[2],
+            0.0,
+            100.0,
         )
         self.state.hidden_shift = np.clip(
             self.gs_scale * self.state.shift / 100.0
             - self.gs_setpoint_dependency * self.state.setpoint
             - self.gs_bound,
-            -self.gs_bound, self.gs_bound,
+            -self.gs_bound,
+            self.gs_bound,
         )
 
     def _update_fatigue(self) -> None:
@@ -379,6 +400,7 @@ class IDS:
 # IBGym – Gymnasium wrapper
 # ---------------------------------------------------------------------------
 
+
 class IBGym(gym.Env):
     """Gymnasium wrapper for the industrial benchmark."""
 
@@ -420,12 +442,7 @@ class IBGym(gym.Env):
 
         if self.action_type == "discrete":
             self.action_space = gym.spaces.Discrete(27)
-            self.env_action: list[list[int]] = [
-                [v, g, s]
-                for v in [-1, 0, 1]
-                for g in [-1, 0, 1]
-                for s in [-1, 0, 1]
-            ]
+            self.env_action: list[list[int]] = [[v, g, s] for v in [-1, 0, 1] for g in [-1, 0, 1] for s in [-1, 0, 1]]
         elif self.action_type == "continuous":
             self.action_space = gym.spaces.Box(
                 np.array([-1, -1, -1], dtype=np.float32),
@@ -449,7 +466,8 @@ class IBGym(gym.Env):
         self.reset()
 
     def step(
-        self, action: Any,
+        self,
+        action: Any,
     ) -> tuple[NDArray[np.float64], float, bool, bool, dict[str, Any]]:
         if self.terminated:
             self.reset()
@@ -511,9 +529,12 @@ class IBGym(gym.Env):
     def render(self) -> None:
         if self.render_mode == "human":
             print(
-                "Reward:", self.reward,
-                "State (v,g,s):", self.IB.visibleState()[1:4],
-                "Action:", self.last_action,
+                "Reward:",
+                self.reward,
+                "State (v,g,s):",
+                self.IB.visibleState()[1:4],
+                "Action:",
+                self.last_action,
             )
 
     def _update_observation(self) -> NDArray[np.float64]:
@@ -541,19 +562,49 @@ class IBGym(gym.Env):
     def _markovian_state(self) -> dict[str, float]:
         s = self.IB.state
         keys = [
-            "setpoint", "velocity", "gain", "shift", "fatigue", "consumption",
-            "op_cost_t0", "op_cost_t1", "op_cost_t2", "op_cost_t3", "op_cost_t4",
-            "op_cost_t5", "op_cost_t6", "op_cost_t7", "op_cost_t8", "op_cost_t9",
-            "ml1", "ml2", "ml3", "hv", "hg",
+            "setpoint",
+            "velocity",
+            "gain",
+            "shift",
+            "fatigue",
+            "consumption",
+            "op_cost_t0",
+            "op_cost_t1",
+            "op_cost_t2",
+            "op_cost_t3",
+            "op_cost_t4",
+            "op_cost_t5",
+            "op_cost_t6",
+            "op_cost_t7",
+            "op_cost_t8",
+            "op_cost_t9",
+            "ml1",
+            "ml2",
+            "ml3",
+            "hv",
+            "hg",
         ]
         values = [
-            s.setpoint, s.velocity, s.gain, s.shift, s.fatigue, s.consumption,
-            s.operational_cost_buffer[0], s.operational_cost_buffer[1],
-            s.operational_cost_buffer[2], s.operational_cost_buffer[3],
-            s.operational_cost_buffer[4], s.operational_cost_buffer[5],
-            s.operational_cost_buffer[6], s.operational_cost_buffer[7],
-            s.operational_cost_buffer[8], s.operational_cost_buffer[9],
-            s.gs_domain, s.gs_sys_response, s.gs_phi_idx,
-            s.hidden_velocity, s.hidden_gain,
+            s.setpoint,
+            s.velocity,
+            s.gain,
+            s.shift,
+            s.fatigue,
+            s.consumption,
+            s.operational_cost_buffer[0],
+            s.operational_cost_buffer[1],
+            s.operational_cost_buffer[2],
+            s.operational_cost_buffer[3],
+            s.operational_cost_buffer[4],
+            s.operational_cost_buffer[5],
+            s.operational_cost_buffer[6],
+            s.operational_cost_buffer[7],
+            s.operational_cost_buffer[8],
+            s.operational_cost_buffer[9],
+            s.gs_domain,
+            s.gs_sys_response,
+            s.gs_phi_idx,
+            s.hidden_velocity,
+            s.hidden_gain,
         ]
         return dict(zip(keys, values))

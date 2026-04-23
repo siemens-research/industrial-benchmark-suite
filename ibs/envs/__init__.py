@@ -36,4 +36,3 @@ register(
     entry_point="ibs.envs.industrial_benchmark.industrial_benchmark_env:IBGym",
     kwargs={"setpoint": 50},
 )
-

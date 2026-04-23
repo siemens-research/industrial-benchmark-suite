@@ -58,4 +58,3 @@ Episodes terminate after `reset_after_timesteps` steps (default: 1000).
 ## References
 
 - D. Hein, S. Depeweg, M. Tokic, S. Udluft, A. Hentschel, T. A. Runkler, V. Sterzing. "A benchmark environment motivated by industrial control problems." *IEEE Symposium Series on Computational Intelligence (SSCI)*, 2017.
-

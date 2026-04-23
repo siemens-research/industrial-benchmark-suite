@@ -36,8 +36,8 @@ from numpy import arccos, cbrt, cos, pi, sign, sin, sqrt
 # Normalized Linearly-biased Goldstone Potential (NLGP)
 # ---------------------------------------------------------------------------
 
-class NormalizedGoldstonePotential:
 
+class NormalizedGoldstonePotential:
     def __init__(self) -> None:
         u0 = cbrt(1 + sqrt(2)) / sqrt(3)
         r0 = u0 + 1 / (3 * u0)
@@ -75,8 +75,8 @@ class NormalizedGoldstonePotential:
 # Reward function for a fixed angle phi
 # ---------------------------------------------------------------------------
 
-class GoldstoneRewardFunction:
 
+class GoldstoneRewardFunction:
     def __init__(self, phi: float, max_required_step: float) -> None:
         if max_required_step <= 0:
             raise ValueError("Value for argument max_required_step must be positive")
@@ -107,6 +107,7 @@ class GoldstoneRewardFunction:
                 exponent = (2 - abs(opt_rad)) / (2 - abs(min_rad))
                 scaling = (2 - abs(min_rad)) / (2 - abs(opt_rad)) ** exponent
                 return np.sign(x) * (abs(min_rad) + scaling * (abs(x) - abs(opt_rad)) ** exponent)
+
         return transform
 
     def _build_reward_function(self, phi: float, max_required_step: float):
@@ -122,6 +123,7 @@ class GoldstoneRewardFunction:
 # Goldstone dynamics
 # ---------------------------------------------------------------------------
 
+
 class Domain(Enum):
     negative = -1
     positive = +1
@@ -133,7 +135,6 @@ class SystemResponse(Enum):
 
 
 class GoldstoneDynamics:
-
     def __init__(self, number_steps: int, max_required_step: float, safe_zone: float) -> None:
         if safe_zone < 0:
             raise ValueError("safe_zone must be non-negative")
@@ -223,8 +224,8 @@ class GoldstoneDynamics:
 # GoldstoneEnvironment – public interface used by IDS
 # ---------------------------------------------------------------------------
 
-class GoldstoneEnvironment:
 
+class GoldstoneEnvironment:
     def __init__(self, number_steps: int, max_required_step: float, safe_zone: float) -> None:
         self._dynamics = GoldstoneDynamics(number_steps, max_required_step, safe_zone)
 
@@ -239,6 +240,9 @@ class GoldstoneEnvironment:
         position: float,
     ) -> tuple[float, Domain, int, SystemResponse]:
         domain, phi_idx, system_response = self._dynamics.state_transition(
-            domain, phi_idx, system_response, position,
+            domain,
+            phi_idx,
+            system_response,
+            position,
         )
         return self.reward(phi_idx, position), domain, phi_idx, system_response
