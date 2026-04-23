@@ -10,6 +10,7 @@ The suite currently includes the following environments, which are described in 
 - [Real Cartpole Environment](docs/envs/real_cartpole/real_cartpole.md)
 - [Distillation Environment](docs/envs/distillation/distillation.md)
 - [Four Tank Environment](docs/envs/four_tank/four_tank.md)
+- [Industrial Benchmark](docs/envs/industrial_benchmark/industrial_benchmark.md)
 - [Continuous Casting Benchmark](docs/envs/ccbench/continuous_casting_concept.md)
 
 ## Datasets
