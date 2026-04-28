@@ -61,10 +61,10 @@ direct influence on the observed Mass Flowrate.
 
 #### Control Challenge
 
-The two control actions are coupled and create effects on different time scales. 
-Increasing the energy rate boosts vapour flow and throughput, 
-but purity may deteriorate unless the reflux ratio is simultaneously increased to compensate. 
-Increasing the reflux ratio improves purity but reduces net distillate output, 
+The two control actions are coupled and create effects on different time scales.
+Increasing the energy rate boosts vapour flow and throughput,
+but purity may deteriorate unless the reflux ratio is simultaneously increased to compensate.
+Increasing the reflux ratio improves purity but reduces net distillate output,
 which may in turn require a higher
 energy rate to maintain the desired throughput. The control challenge therefore
 lies in finding and maintaining the operating point at which both the target
