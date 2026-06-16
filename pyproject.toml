@@ -5,6 +5,7 @@ description = "Collection of industrial benchmark environments."
 authors = [
     "Marc Weber <marc-weber@siemens.com>",
     "Holger Schoener <holger.schoener@siemens.com>",
+    "Daniel Hein <hein.daniel@siemens.com>",
 ]
 license = "Siemens Inner Source License v1.4"
 readme = "README.md"
