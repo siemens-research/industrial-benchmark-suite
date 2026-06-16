@@ -12,7 +12,7 @@ The benchmark environment represents a continuous binary distillation column use
 to separate a liquid feed mixture of methanol and water into an methanol-enriched
 top product and a water-enriched bottom product. The separation exploits the
 difference in boiling temperatures of the two components: methanol, with a lower
-boiling point of approximately 78°C, preferentially concentrates in the rising
+boiling point of approximately 65°C, preferentially concentrates in the rising
 vapour phase, while water, boiling at approximately 100°C, accumulates in the
 descending liquid phase.
 
