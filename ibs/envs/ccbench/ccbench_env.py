@@ -28,6 +28,7 @@ from ibs.common.goal_env import GoalEnv
 from ibs.common.sequences import is_sequence
 
 from . import generators
+from .config_utils import resolve_callbacks
 
 
 class CCBenchEnv(GoalEnv):
@@ -66,7 +67,7 @@ class CCBenchEnv(GoalEnv):
 
         if "action_spec" in config:
             process_spec = _apply_action_limits(process_spec, config["action_spec"])
-        process_spec = _resolve_process_callbacks(process_spec)
+        process_spec = resolve_callbacks(process_spec)
 
         self.process_spec = {k: dict(v) for k, v in process_spec.items()}
         self.cur_timestep = None
@@ -411,31 +412,6 @@ def _apply_action_limits(
         if "limits" in action_cfg:
             merged[action_name]["limits"] = action_cfg["limits"]
     return merged
-
-
-def _resolve_process_callbacks(process_spec: Mapping[str, Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    from ibs.envs.ccbench.functions import norm_filter, soft_hinge
-    from scipy import signal
-
-    callbacks_namespace = {
-        "np": np,
-        "signal": signal,
-        "norm_filter": norm_filter,
-        "soft_hinge": soft_hinge,
-    }
-
-    def resolve_callback(callback_spec: str):
-        safe_globals = {"__builtins__": {}}
-        safe_globals.update(callbacks_namespace)
-        return eval(callback_spec, safe_globals, {})  # pylint: disable=eval-used
-
-    resolved = {k: dict(v) for k, v in process_spec.items()}
-    for _, series_spec in resolved.items():
-        if "fc_callback" in series_spec and isinstance(series_spec["fc_callback"], str):
-            series_spec["fc_callback"] = resolve_callback(series_spec["fc_callback"])
-        if "af_kernel" in series_spec and isinstance(series_spec["af_kernel"], str):
-            series_spec["af_kernel"] = resolve_callback(series_spec["af_kernel"])
-    return resolved
 
 
 def _coerce_timestamp(value: Any) -> dt.datetime:

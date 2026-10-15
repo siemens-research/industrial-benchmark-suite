@@ -1,5 +1,6 @@
 """Utilities for loading and merging YAML configuration."""
 
+import logging
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -8,6 +9,8 @@ from typing import Optional
 from typing import Union
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 def load_config(
@@ -33,7 +36,7 @@ def load_config(
 
     config: Dict[str, Any] = {}
     if config_file is not None:
-        print(f"Reading config file {config_file} ...")
+        logger.debug("Reading config file %s ...", config_file)
         with open(config_file, "rt", encoding="utf8") as f:
             loaded = yaml.safe_load(f)
             if loaded is not None:

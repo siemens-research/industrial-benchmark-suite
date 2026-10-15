@@ -25,7 +25,7 @@ include_temporary:    False
 include_intermediate: False
 # include_intermediate: True
 
-# random seed for data generation, used for numpy.random.*
+# random seed for data generation; per-episode seeds for the environment and the exploration agent are derived from it
 seed: 729256
 
 # call plt.show() for each figure?
@@ -70,6 +70,7 @@ action_spec:
     "DS_action":
         type:        ["spike_action_gen", "controls_limiter"]
         semantics:   "action"
+        limits:      [-3.0, 3.0]
         # spike_action_gen arguments
         sag_stepslen:     12
         sag_action_prob:  0.1

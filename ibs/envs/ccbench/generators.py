@@ -33,7 +33,13 @@ logger = logging.getLogger(__name__)
 
 
 class ChannelGenerator:
-    def __init__(self, channel_name: str, spec: Optional[Mapping[str, Any]] = None, replay: Optional[pd.Series] = None):
+    def __init__(
+        self,
+        channel_name: str,
+        spec: Optional[Mapping[str, Any]] = None,
+        replay: Optional[pd.Series] = None,
+        rng: Optional[np.random.Generator] = None,
+    ):
         """
         Provide basis class for channel generator class hierarchy.
 
@@ -41,10 +47,15 @@ class ChannelGenerator:
             channel_name: name of the channel this generator is used for
             spec: contains configuration parameters for channel generator instance, usually taken from yaml
                 configuration file
+            replay: optional series with values to be returned instead of generated ones (for matching timesteps)
+            rng: random number generator used for all random draws of this generator; if None, a new, unseeded
+                generator is created. Pass a seeded generator (e.g. the environment's `np_random`) for reproducible
+                data.
         """
         self.channel_name = channel_name
         self.spec: Dict[str, Any] = dict(spec) if spec is not None else {}
         self.replay = replay
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         """
@@ -67,7 +78,7 @@ class ChannelGenerator:
         """
         if self.replay is not None and timestep in self.replay.index:
             return self.replay[timestep]
-        return cur_val or 0.0
+        return cur_val if cur_val is not None else 0.0
 
     def info_str(self, verbosity=1):
         """Return a short string representing the type of generator (class) and most import configuration parameters."""
@@ -93,9 +104,9 @@ class control_from_actions(ChannelGenerator):
 
     def __init__(self, init: Optional[float] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.last_val = init or self.spec.get("cfa_init", 1.0)
+        self.last_val = init if init is not None else self.spec.get("cfa_init", 1.0)
         if isinstance(self.last_val, (tuple, list)):
-            self.last_val = np.random.uniform(self.last_val[0], self.last_val[1])
+            self.last_val = self.rng.uniform(self.last_val[0], self.last_val[1])
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -155,6 +166,7 @@ class spike_action_gen(ChannelGenerator):
         scale: generated values follow the distribution provided in the `dist` argement, but are multiplied by `scale`
             during generation.
         offset: the scaled random distribution is shifted by this specified offset
+        limits: optional two-element sequence; generated action values are clipped to this interval
     """
 
     def __init__(
@@ -164,15 +176,17 @@ class spike_action_gen(ChannelGenerator):
         dist: Optional[str] = None,
         scale: Optional[float] = None,
         offset: Optional[float] = None,
+        limits: Optional[Sequence[float]] = None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.stepslen = stepslen or self.spec.get("sag_stepslen", 1)
-        self.action_prob = action_prob or self.spec.get("sag_action_prob", 1.0)
-        self.dist = dist or self.spec.get("sag_dist", "normal")
-        self.scale = scale or self.spec.get("sag_scale", 1.0)
-        self.offset = offset or self.spec.get("sag_offset", 0.0)
+        self.stepslen = stepslen if stepslen is not None else self.spec.get("sag_stepslen", 1)
+        self.action_prob = action_prob if action_prob is not None else self.spec.get("sag_action_prob", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("sag_dist", "normal")
+        self.scale = scale if scale is not None else self.spec.get("sag_scale", 1.0)
+        self.offset = offset if offset is not None else self.spec.get("sag_offset", 0.0)
+        self.limits = limits if limits is not None else self.spec.get("sag_limits")
         self.steps_until_action = self.stepslen
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
@@ -183,18 +197,20 @@ class spike_action_gen(ChannelGenerator):
             return self.replay[timestep]
         if self.steps_until_action < self.stepslen:
             return self.offset
-        if np.random.uniform() >= self.action_prob:
+        if self.rng.uniform() >= self.action_prob:
             return self.offset
         new_val = None
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         new_val += self.offset
         if cur_val is not None and not np.isnan(cur_val):
             new_val += cur_val
+        if self.limits is not None:
+            new_val = float(np.clip(new_val, self.limits[0], self.limits[1]))
         return new_val
 
     def info_str(self, verbosity=1):
@@ -243,11 +259,15 @@ class controls_exponential_action_scaler(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.assoc_ctrl_channel = assoc_ctrl_channel or self.spec["ceas_assoc_ctrl_channel"]
-        self.decay = decay or self.spec.get("ceas_decay", 0.0)
-        self.offset = offset or self.spec.get("ceas_offset", 0.0)
-        self.factor = factor or self.spec.get("ceas_factor", 1.0)
-        self.ctrl_limits = ctrl_limits or self.spec.get("ceas_ctrl_limits", [-np.inf, np.inf])
+        self.assoc_ctrl_channel = (
+            assoc_ctrl_channel if assoc_ctrl_channel is not None else self.spec["ceas_assoc_ctrl_channel"]
+        )
+        self.decay = decay if decay is not None else self.spec.get("ceas_decay", 0.0)
+        self.offset = offset if offset is not None else self.spec.get("ceas_offset", 0.0)
+        self.factor = factor if factor is not None else self.spec.get("ceas_factor", 1.0)
+        self.ctrl_limits = (
+            ctrl_limits if ctrl_limits is not None else self.spec.get("ceas_ctrl_limits", [-np.inf, np.inf])
+        )
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -298,10 +318,14 @@ class controls_limiter(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.assoc_ctrl_channel = assoc_ctrl_channel or self.spec["cl_assoc_ctrl_channel"]
-        self.decay = decay or self.spec.get("cl_decay", 0.0)
-        self.offset = offset or self.spec.get("cl_offset", 0.0)
-        self.ctrl_limits = ctrl_limits or self.spec.get("cl_ctrl_limits", [-np.inf, np.inf])
+        self.assoc_ctrl_channel = (
+            assoc_ctrl_channel if assoc_ctrl_channel is not None else self.spec["cl_assoc_ctrl_channel"]
+        )
+        self.decay = decay if decay is not None else self.spec.get("cl_decay", 0.0)
+        self.offset = offset if offset is not None else self.spec.get("cl_offset", 0.0)
+        self.ctrl_limits = (
+            ctrl_limits if ctrl_limits is not None else self.spec.get("cl_ctrl_limits", [-np.inf, np.inf])
+        )
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -352,9 +376,9 @@ class random_walk(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, spec=spec, **kwargs)
-        self.scale = scale or self.spec.get("rw_scale", 1.0)
-        self.dist = dist or self.spec.get("rw_dist", "normal")
-        self.decay = decay or self.spec.get("rw_decay", 0.0)
+        self.scale = scale if scale is not None else self.spec.get("rw_scale", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("rw_dist", "normal")
+        self.decay = decay if decay is not None else self.spec.get("rw_decay", 0.0)
         self.last_val = 0.0
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
@@ -362,9 +386,9 @@ class random_walk(ChannelGenerator):
             self.last_val = self.replay[timestep]
             return self.last_val
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         new_val += self.last_val
@@ -419,10 +443,12 @@ class random_walk_overlay(ChannelGenerator):
     ):
         super().__init__(*args, **kwargs)
         steplen_raw = steplen if steplen is not None else self.spec.get("rwo_steplen", [None])
-        scales = scales or self.spec.get("rwo_scales", [1])
-        dists = dists or self.spec.get("rwo_dists", ["normal"])
-        decays = decays or self.spec.get("rwo_decays", [0.0])
-        self.offset = offset or self.spec.get("offset", 0.0)
+        scales = scales if scales is not None else self.spec.get("rwo_scales", [1])
+        dists = dists if dists is not None else self.spec.get("rwo_dists", ["normal"])
+        decays = decays if decays is not None else self.spec.get("rwo_decays", [0.0])
+        if offset is None:
+            offset = self.spec.get("rwo_offset", self.spec.get("offset", 0.0))
+        self.offset = offset
         steplen_seq = cast(Sequence[Optional[int]], steplen_raw)
         self.steplen = [sl if sl is not None else 1 for sl in steplen_seq]
         self.scales = (
@@ -435,7 +461,7 @@ class random_walk_overlay(ChannelGenerator):
         self.step_counts = [sl for sl in self.steplen]
         self.last_vals: List[float] = [0.0] * len(self.steplen)
         self.random_walks = [
-            random_walk(scale, dist, decay, channel_name=self.channel_name)
+            random_walk(scale=scale, dist=dist, decay=decay, channel_name=self.channel_name, rng=self.rng)
             for scale, dist, decay in zip(self.scales, self.dists, self.decays)
         ]
 
@@ -477,16 +503,16 @@ class white_noise(ChannelGenerator):
 
     def __init__(self, scale: Optional[float] = None, dist: Optional[str] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.scale = scale or self.spec.get("wn_scale", 1.0)
-        self.dist = dist or self.spec.get("wn_dist", "normal")
+        self.scale = scale if scale is not None else self.spec.get("wn_scale", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("wn_dist", "normal")
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
             return self.replay[timestep]
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         if cur_val is not None:
@@ -516,8 +542,8 @@ class function_callback(ChannelGenerator):
 
     def __init__(self, inputs: Optional[Sequence[str]] = None, callback: Optional[Callable] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.inputs = inputs or self.spec.get("fc_inputs", [])
-        self.callback = callback or self.spec["fc_callback"]
+        self.inputs = inputs if inputs is not None else self.spec.get("fc_inputs", [])
+        self.callback = callback if callback is not None else self.spec["fc_callback"]
         self.input_values = pd.Series(
             [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
         )
@@ -561,7 +587,7 @@ class apply_filter(ChannelGenerator):
 
     def __init__(self, kernel: Optional[Sequence[float]] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.kernel = kernel or self.spec["af_kernel"]
+        self.kernel = kernel if kernel is not None else self.spec["af_kernel"]
         self.input_values = pd.Series(
             [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
         )
@@ -622,7 +648,7 @@ def get_num_plots(spec: Mapping[str, Mapping[str, Any]], with_intermediates=Fals
     """
     num_plots = 0
     for _, sub_spec in spec.items():
-        if sub_spec["semantics"] in ("temp") and not with_temporaries:
+        if sub_spec["semantics"] in ("temp",) and not with_temporaries:
             continue
         num_plots += 1
         if with_intermediates and isinstance(sub_spec["type"], (list, tuple)):
