@@ -247,7 +247,7 @@ def validate_ccbench_config(config: Mapping[str, Any]) -> None:
         if spec.get("semantics") == "target" and spec.get("vop_type") not in VOP_TYPES:
             errors.append(f"process_spec.{channel}.vop_type must be one of {VOP_TYPES}, got {spec.get('vop_type')!r}")
 
-    errors.extend(_validate_desired_goal(config.get("desired_goal"), targets))
+    errors.extend(desired_goal_errors(config.get("desired_goal"), targets))
 
     if config.get("freq") is not None:
         try:
@@ -345,9 +345,19 @@ def _validate_value_in_limits(name: str, value: Any, spec: Mapping[str, Any]) ->
     return []
 
 
-def _validate_desired_goal(desired_goal: Any, targets: Mapping[str, Mapping[str, Any]]) -> List[str]:
+def desired_goal_errors(desired_goal: Any, process_spec: Mapping[str, Mapping[str, Any]]) -> List[str]:
+    """Check a `desired_goal` configuration (value or schedule `[[step, value], ...]` per target channel).
+
+    Args:
+        desired_goal: Goal configuration to check, None is valid.
+        process_spec: Channel specifications, the target channels are used for checking names and limits.
+
+    Returns:
+        List of detected problems, empty if the goal configuration is valid.
+    """
     if desired_goal is None:
         return []
+    targets = {k: v for k, v in process_spec.items() if isinstance(v, Mapping) and v.get("semantics") == "target"}
     if not isinstance(desired_goal, Mapping):
         return [f"desired_goal must be a mapping from target channel names to values, got {desired_goal!r}"]
     errors = []
@@ -364,8 +374,15 @@ def _validate_desired_goal(desired_goal: Any, targets: Mapping[str, Mapping[str,
             continue
         steps = []
         for entry in goal:
-            if not isinstance(entry, (list, tuple)) or len(entry) != 2 or not _is_int(entry[0]):
-                errors.append(f"{name} schedule entries must be [step, value] with integer step, got {entry!r}")
+            if (
+                not isinstance(entry, (list, tuple))
+                or len(entry) != 2
+                or not _is_int(entry[0])
+                or not _is_number(entry[1])
+            ):
+                errors.append(
+                    f"{name} schedule entries must be [step, value] with integer step and numeric value, got {entry!r}"
+                )
                 break
             steps.append(entry[0])
             errors.extend(_validate_value_in_limits(f"{name}[step {entry[0]}]", entry[1], targets[target]))

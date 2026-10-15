@@ -19,6 +19,25 @@ episodes:        5
 # episode_length:  5000
 episode_length:  1000
 #episode_length:  500
+
+# environment settings (CCBench-v1 defaults; CCBench-v0 uses truncate_on_time_limit=False, warmup_steps=0 and
+# expose_temp_channels=True)
+# duration of one step: number of seconds or pandas offset string (e.g. "1s", "1min"); units of the action channels
+# below ("per step") refer to this duration
+freq:            1
+# start of the first episode and of each episode reset with a seed; naive timestamps are interpreted as UTC
+start_timestamp: "2000-01-01T00:00:00Z"
+# report reaching episode_length as truncated (True) or as terminated (False, legacy)
+#truncate_on_time_limit: True
+# number of hidden zero-action steps before the initial observation, "auto" until all observations are finite
+#warmup_steps:    "auto"
+# include channels with semantics "temp" (e.g. "wave") in observations and observation space?
+#expose_temp_channels: False
+# setpoints of the target channels: value or schedule [[step, value], ...] (starting at step 0) per target channel;
+# targets without entry use the midpoint of their limits. Can be overridden per episode via reset(options=...).
+#desired_goal:
+#    OD: 7.5
+#    WT: [[0, 0.4], [500, 0.7]]
 # include data of channels marked as semantics="temp" in the process_spec below?
 include_temporary:    False
 # include data of channels only computed as intermediate channel values in chains specified in process_spec type lists?
@@ -55,6 +74,7 @@ action_spec:
         #temp:        False            # temporary channel which should not be used as action/process channel but is needed as input to other channel computations
         semantics:   "action"         # Which kind of channel does this correspond to? "action", "temp"
         limits:      [-4.0, 4.0]      # to which interval should the resulting action values (after transformation/scaling/offset) be limited?
+        unit:        "mbar/step"
         # spike_action_gen arguments
         sag_stepslen:     10          # how long is the control not changed (action=0) after an action?
         sag_action_prob:  0.2         # what is the probability of a action after stepslen have passed since the last action?
@@ -71,6 +91,7 @@ action_spec:
         type:        ["spike_action_gen", "controls_limiter"]
         semantics:   "action"
         limits:      [-3.0, 3.0]
+        unit:        "m/min/step"
         # spike_action_gen arguments
         sag_stepslen:     12
         sag_action_prob:  0.1
@@ -87,6 +108,7 @@ action_spec:
         type:        ["random_walk_overlay", "apply_filter", "differences", "controls_limiter"]
         semantics:   "action"
         limits:      [-0.1, 0.1]
+        unit:        "kW/step"
         rwo_offset:  5.0
         rwo_steplen: [1]
         rwo_scales:  [6.0]
@@ -105,23 +127,27 @@ process_spec:
         semantics:   "control"    # Which kind of channel does this correspond to? "control", "action", "target", "state", "context", "temp"
         assoc_action_channel: "BP_action"   # which is the action channel to be used as source for control changes of this channel?
         limits:      [5.0, 30.0]  # what are the limits not to be exceeded by values of this control channel?
+        unit:        "mbar"  # nominal unit of the synthetic process
         cfa_init:    12.0         # what value should be used as initial value for this control channel? one of <initial-value>, [<min>, <max-of-random-initialization>]
     "DS": # control channel resulting from the actions specified in DS_action channel
         type:        ["control_from_actions"]
         semantics:   "control"
         assoc_action_channel: "DS_action"
         limits:      [1.0, 12.0]
+        unit:        "m/min"
         cfa_init:    [2.0, 10.0]
     "HE": # control channel resulting from the actions specified in HE_action channel
         type:        ["control_from_actions"]
         semantics:   "control"
         assoc_action_channel: "HE_action"
         limits:      [0.0, 15.0]
+        unit:        "kW"
         cfa_init:    [2.0, 12.0]
     "AT": # random walk smoothed by filtering it with a bell-shaped curve
         type:        ["random_walk_overlay", "apply_filter"]
         semantics:   "state"
         limits:      [-20.0, 40.0]
+        unit:        "°C"
         rwo_offset:  5.0
         rwo_steplen: [1]
         rwo_scales:  [5.0]
@@ -141,6 +167,7 @@ process_spec:
         semantics:     "target"
         vop_type:      "setpoint"     # type of reward for this target: "setpoint", "upper_limit", "lower_limit"
         limits:        [0.1, 15.0]
+        unit:        "mm"
         fc_inputs:     ["BP", "DS", "AT", "wave"]
         fc_callback:   "lambda bp,ds,at,wave: wave.iloc[-1] + 1.5 * bp.iloc[-4] / ds.iloc[-2] + 0.1 * at.iloc[-1]"
         #fc_callback:   "lambda bp,ds,wave: wave + 1.5 * bp.shift(3).fillna(method='bfill') / ds.shift(1).fillna(method='bfill')"
@@ -152,6 +179,7 @@ process_spec:
         semantics:     "target"
         vop_type:      "setpoint"
         limits:        [0.01, 1.2]
+        unit:        "mm"
         fc_inputs:     ["BP", "DS", "AT"]
         fc_callback:   "lambda bp,ds,at: 15.0 / bp.iloc[-6] / ds.iloc[-3] / (1.0 - 0.02 * at.iloc[-1])"
         #fc_callback:   "lambda bp,ds: 15.0 / bp.shift(5).fillna(method='bfill') / ds.shift(2).fillna(method='bfill')"

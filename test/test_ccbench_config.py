@@ -88,6 +88,7 @@ def test_default_config_is_valid():
         ({"desired_goal": {"OD": [[5, 5.0]]}}, "must start at step 0"),
         ({"desired_goal": {"OD": [[0, 5.0], [10, 6.0], [10, 7.0]]}}, "strictly increasing"),
         ({"desired_goal": {"OD": [[0.5, 5.0]]}}, "integer step"),
+        ({"desired_goal": {"OD": [[0, [1.0, 2.0]]]}}, "numeric value"),
         ({"freq": 0}, "freq"),
         ({"freq": "-1s"}, "freq"),
         ({"episode_length": 0}, "episode_length"),

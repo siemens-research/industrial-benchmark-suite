@@ -30,9 +30,13 @@ from ibs.common.sequences import is_sequence
 
 from . import generators
 from .config_utils import channel_metadata
+from .config_utils import deep_merge
+from .config_utils import desired_goal_errors
 from .config_utils import parse_freq
 from .config_utils import resolve_callbacks
+from .config_utils import validate_ccbench_config
 
+DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config/ccbench_default.yaml"
 DEFAULT_START_TIMESTAMP = "2000-01-01T00:00:00Z"
 # maximum number of hidden warm-up steps for `warmup_steps="auto"`
 MAX_AUTO_WARMUP_STEPS = 64
@@ -63,20 +67,23 @@ class CCBenchEnv(GoalEnv):
 
         Args:
             config_file: Optional YAML file providing configuration values.
-            config_dict: Optional mapping of configuration values.
+            config_dict: Optional mapping of configuration values, replacing top-level keys of `config_file` (use
+                `create_ccbench_env` for merging nested values). Without both, the default config file is used.
             render_mode: Must be None, the environment does not support rendering.
+
+        Raises:
+            ValueError: if the configuration is invalid (see `ibs.envs.ccbench.config_utils.validate_ccbench_config`).
         """
         super().__init__()
         if render_mode is not None:
             raise ValueError(f"Unsupported render_mode {render_mode!r}, CCBenchEnv does not support rendering")
         self.render_mode = render_mode
         if config_file is None and config_dict is None:
-            config_file = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config/ccbench_default.yaml"
+            config_file = DEFAULT_CONFIG_FILE
         config = load_config(config_file=config_file, config_dict=config_dict)
+        validate_ccbench_config(config)
 
-        process_spec = config.get("process_spec")
-        if process_spec is None:
-            raise ValueError("process_spec must be provided directly or via config")
+        process_spec = config["process_spec"]
 
         start_timestamp = config.get("start_timestamp")
         freq = config.get("freq")
@@ -87,6 +94,9 @@ class CCBenchEnv(GoalEnv):
         self.truncate_on_time_limit = bool(config.get("truncate_on_time_limit", True))
         self.warmup_steps: Union[int, str] = config.get("warmup_steps", "auto")
         self.expose_temp_channels = bool(config.get("expose_temp_channels", False))
+        # configured goal per target channel (value or schedule), see `_current_goal()`
+        self.config_desired_goal: Dict[str, Any] = copy.deepcopy(dict(config.get("desired_goal") or {}))
+        self._episode_goal_spec: Dict[str, Any] = {}
 
         if "action_spec" in config:
             process_spec = _apply_action_limits(process_spec, config["action_spec"])
@@ -215,8 +225,10 @@ class CCBenchEnv(GoalEnv):
         Args:
             seed: RNG seed for the environment's `np_random` generator, which drives all random channel generators.
                 With a seed, the episode starts at `start_timestamp` (unless specified otherwise) and is reproducible.
-            options: Optional reset options. Supported key: `episode_start` (timestamp, same as the `episode_start`
-                argument, taking precedence over it).
+            options: Optional reset options. Supported keys: `episode_start` (timestamp, same as the `episode_start`
+                argument, taking precedence over it) and `desired_goal` (mapping of target channels to a value or a
+                schedule `[[step, value], ...]`, replacing the configured `desired_goal` of these targets for this
+                episode).
             episode_start: Explicit start timestamp. If omitted, seeded resets and the first episode start at
                 `start_timestamp`, unseeded resets start `episode_step` after the last timestep of the previous
                 episode. Naive timestamps are interpreted as UTC.
@@ -231,6 +243,10 @@ class CCBenchEnv(GoalEnv):
         """
         super().reset(seed=seed, options=dict(options) if options is not None else None)
         options = dict(options) if options is not None else {}
+        errors = desired_goal_errors(options.get("desired_goal"), self.process_spec)
+        if errors:
+            raise ValueError("Invalid desired_goal option:\n- " + "\n- ".join(errors))
+        self._episode_goal_spec = {**self.config_desired_goal, **copy.deepcopy(dict(options.get("desired_goal") or {}))}
 
         # find specified or suitable episode start timestamp
         if replay is not None:
@@ -300,8 +316,8 @@ class CCBenchEnv(GoalEnv):
         Args:
             action: Either a mapping of action channels to (scalar or shape () array) values, or a numpy array
                 aligned with `action_control_map` order.
-            desired_goal: Optional goal for (some of) the target channels, kept for the remaining episode. If omitted,
-                goals are replayed or derived.
+            desired_goal: Optional goal values for (some of) the target channels, taking precedence over the
+                configured goals and schedules for the remaining episode. Replayed goals take precedence over both.
 
         Returns:
             Observation (dict with float values), reward, terminated, truncated and info dict with `step`, `timestamp`
@@ -341,11 +357,18 @@ class CCBenchEnv(GoalEnv):
         return {k: float(v) for k, v in zip(self.action_control_map, values)}
 
     def _current_goal(self, cur_ts: pd.Timestamp) -> Dict[str, float]:
-        """Goal in effect at `cur_ts`: replayed, else explicitly set via `step()`, else derived."""
+        """Goal in effect at `cur_ts`.
+
+        Precedence per target: replayed goal, value set via `step(desired_goal)`, `desired_goal` reset option,
+        configured `desired_goal`, midpoint of the target limits. For schedules, the last entry with
+        `step <= step_count` is used.
+        """
         if self.replay is not None and cur_ts in self.replay.index:
             if all(o in self.replay.columns for o in self.target_obj_map.values()):
                 return {t: float(self.replay.at[cur_ts, o]) for t, o in self.target_obj_map.items()}  # type: ignore
         goal = {k: float(v) for k, v in self.derive_desired_goal().items()}
+        for target, goal_spec in self._episode_goal_spec.items():
+            goal[target] = _scheduled_value(goal_spec, self.step_count)
         if self._explicit_goal is not None:
             goal.update(self._explicit_goal)
         return goal
@@ -513,6 +536,18 @@ def has_limits(d):
     return "limits" in d and (not np.isinf(d["limits"][0])) and (not np.isinf(d["limits"][1]))
 
 
+def _scheduled_value(goal_spec: Any, step: int) -> float:
+    """Return a goal value, or the value of the last schedule entry `[step, value]` not after `step`."""
+    if not isinstance(goal_spec, (list, tuple)):
+        return float(goal_spec)
+    value = goal_spec[0][1]
+    for entry_step, entry_value in goal_spec:
+        if entry_step > step:
+            break
+        value = entry_value
+    return float(value)
+
+
 def _is_finite_observation(observation: Mapping[str, Mapping[str, float]]) -> bool:
     """Return True if all values of a goal-env observation are finite."""
     return all(np.isfinite(v) for part in observation.values() for v in part.values())
@@ -523,16 +558,14 @@ def _apply_action_limits(
 ) -> Dict[str, Dict[str, Any]]:
     merged = {k: dict(v) for k, v in process_spec.items()}
     for action_name, action_cfg in action_spec.items():
-        if action_name in merged:
-            if "limits" not in merged[action_name] and "limits" in action_cfg:
-                merged[action_name]["limits"] = action_cfg["limits"]
-            continue
-        merged[action_name] = {
-            "type": [],
-            "semantics": "action",
-        }
-        if "limits" in action_cfg:
-            merged[action_name]["limits"] = action_cfg["limits"]
+        if action_name not in merged:
+            merged[action_name] = {
+                "type": [],
+                "semantics": "action",
+            }
+        for key in ("limits", "unit"):
+            if key not in merged[action_name] and key in action_cfg:
+                merged[action_name][key] = action_cfg[key]
     return merged
 
 
@@ -546,15 +579,30 @@ def _coerce_timestamp(value: Any) -> pd.Timestamp:
     return ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
 
 
-def create_ccbench_env(**kwargs) -> CCBenchEnv:
-    """Factory function to create the CCBench environment from the default config file."""
+def create_ccbench_env(
+    config_file: Optional[Path | str] = None,
+    config_dict: Optional[Mapping[str, Any]] = None,
+    render_mode: Optional[str] = None,
+    **overrides,
+) -> CCBenchEnv:
+    """Factory function to create the CCBench environment (`CCBench-v1` defaults) from a configuration.
 
-    return CCBenchEnv(
-        config_file=Path(__file__).resolve().parents[3]
-        / "resources"
-        / "envs"
-        / "ccbench"
-        / "config"
-        / "ccbench_default.yaml",
-        **kwargs,
-    )
+    The configuration is built by recursively merging `config_dict` and then `overrides` into the YAML config (see
+    `ibs.envs.ccbench.config_utils.deep_merge`), so that e.g. `{"process_spec": {"DS": {"cfa_init": 4.0}}}` changes a
+    single parameter. Lists are replaced, a None value removes a key.
+
+    Args:
+        config_file: YAML config file, defaults to the default CCBench config file.
+        config_dict: Nested configuration overrides.
+        render_mode: Must be None, the environment does not support rendering.
+        **overrides: Further top-level configuration overrides (e.g. `episode_length`, `desired_goal`).
+
+    Returns:
+        The configured environment.
+
+    Raises:
+        ValueError: if the merged configuration is invalid.
+    """
+    config = load_config(config_file=config_file if config_file is not None else DEFAULT_CONFIG_FILE)
+    config = deep_merge(deep_merge(config, config_dict), overrides)
+    return CCBenchEnv(config_dict=config, render_mode=render_mode)

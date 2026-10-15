@@ -34,7 +34,14 @@ from ibs.envs.ccbench.config_utils import build_ccbench_config
 from ibs.envs.ccbench.config_utils import resolve_callbacks
 
 # configuration keys forwarded unchanged to the environment, if present in the data generation config
-ENV_CONFIG_KEYS = ("start_timestamp",)
+ENV_CONFIG_KEYS = (
+    "start_timestamp",
+    "freq",
+    "desired_goal",
+    "warmup_steps",
+    "expose_temp_channels",
+    "truncate_on_time_limit",
+)
 
 
 def generate_data(
