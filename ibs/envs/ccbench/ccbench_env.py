@@ -40,6 +40,8 @@ DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[3] / "resources/envs/ccbe
 DEFAULT_START_TIMESTAMP = "2000-01-01T00:00:00Z"
 # maximum number of hidden warm-up steps for `warmup_steps="auto"`
 MAX_AUTO_WARMUP_STEPS = 64
+# API flags of the CCBench-v0 registration (behaviour before CCBench-v1), see `create_ccbench_env_v0`
+LEGACY_V0_FLAGS: Dict[str, Any] = {"truncate_on_time_limit": False, "warmup_steps": 0, "expose_temp_channels": True}
 
 
 class CCBenchEnv(GoalEnv):
@@ -603,6 +605,43 @@ def create_ccbench_env(
     Raises:
         ValueError: if the merged configuration is invalid.
     """
-    config = load_config(config_file=config_file if config_file is not None else DEFAULT_CONFIG_FILE)
-    config = deep_merge(deep_merge(config, config_dict), overrides)
+    return CCBenchEnv(config_dict=_merged_config(config_file, config_dict, overrides), render_mode=render_mode)
+
+
+def create_ccbench_env_v0(
+    config_file: Optional[Path | str] = None,
+    config_dict: Optional[Mapping[str, Any]] = None,
+    render_mode: Optional[str] = None,
+    **overrides,
+) -> CCBenchEnv:
+    """Factory function to create the CCBench environment with the legacy API flags of `CCBench-v0`.
+
+    Same as `create_ccbench_env`, but `LEGACY_V0_FLAGS` are used where neither the config file nor the overrides set
+    these flags: reaching `episode_length` is reported as terminated, there is no warm-up (initial observations of the
+    target channels are NaN) and the temp channels (e.g. "wave") are included in the observations.
+
+    Args:
+        config_file: YAML config file, defaults to the default CCBench config file.
+        config_dict: Nested configuration overrides.
+        render_mode: Must be None, the environment does not support rendering.
+        **overrides: Further top-level configuration overrides (e.g. `episode_length`, `desired_goal`).
+
+    Returns:
+        The configured environment.
+
+    Raises:
+        ValueError: if the merged configuration is invalid.
+    """
+    config = _merged_config(config_file, config_dict, overrides, defaults=LEGACY_V0_FLAGS)
     return CCBenchEnv(config_dict=config, render_mode=render_mode)
+
+
+def _merged_config(
+    config_file: Optional[Path | str],
+    config_dict: Optional[Mapping[str, Any]],
+    overrides: Mapping[str, Any],
+    defaults: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    config = load_config(config_file=config_file if config_file is not None else DEFAULT_CONFIG_FILE)
+    config = deep_merge(defaults or {}, config)
+    return deep_merge(deep_merge(config, config_dict), overrides)

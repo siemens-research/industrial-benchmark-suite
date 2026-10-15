@@ -50,9 +50,10 @@ The most interesting properties can be summarized as follows:
   mathematical formulas including filtered random walks/noise
 - The reward is computed as the sum of negative absolute differences of target channel values from
   desired values ("setpoints", "goal values" or "objective values") for these. The setpoints are
-  currently fixed, but in an extended version of this environment it is planned to expose these as
-  additional inputs, such that RL algorithms capable of using variable objectives can make use of
-  these to tune policies to a current optimization goal (i.e. target values for *OD* and *WT*)
+  part of the observation (`desired_goal`) and can be configured as constant values or as schedules
+  changing during an episode (see [Configuration](#configuration)), such that RL algorithms capable
+  of using variable objectives can make use of these to tune policies to a current optimization goal
+  (i.e. target values for *OD* and *WT*)
 - A special dependency is that of *OD* on *HE*. The latter does not influence the expected (mean)
   value of *OD*, but a noisy sine-wave is overlaid on the raw *OD* value, whose amplitude is scaled
   according to the currently applied *HE*. Using appropriately low *HE*, a RL algorithm should be
@@ -72,8 +73,12 @@ The most interesting properties can be summarized as follows:
     - an increase in *DS* should result in a decrease both in *OD* and in *WT*
     - *HE* only modulates the noise/oscillation on *OD*
     - *AT* has a positive effect on *OD*, but a negative effect on *WT*
-- There are some limits applied in this process. The actions themselves do not have a limit, but
-  the resulting control channel values are limited to
+- There are some limits applied in this process. The actions (changes per step) are limited to
+    - *BP_action*: [ -4.0, 4.0 ]
+    - *DS_action*: [ -3.0, 3.0 ]
+    - *HE_action*: [ -0.1, 0.1 ]
+
+  and the resulting control channel values are limited to
     - *BP*: [ 5.0, 30.0 ]
     - *DS*: [ 1.0, 12.0 ]
     - *HE*: [ 0.0, 15.0 ]
@@ -93,3 +98,126 @@ channel changes, in blue, while the actual control channel values are plotted in
 sampled randomly, but sparsely.
 
 ![Process industry benchmark example episode](ccb_example.png)
+
+## Environment versions
+
+Two versions of the environment are registered with Gymnasium; both use the same process model and
+the default configuration file `resources/envs/ccbench/config/ccbench_default.yaml`:
+
+| Behaviour | `CCBench-v1` (recommended, default of `CCBenchEnv`) | `CCBench-v0` (legacy API) |
+|-----------|------------------------------------------------------|---------------------------|
+| Reaching `episode_length` | `truncated=True` | `terminated=True` |
+| Initial observation | finite, after hidden warm-up steps | target channels are NaN for the first steps |
+| Temp channels (*wave*) | not observed | part of the observation |
+
+```python
+import gymnasium as gym
+import ibs.envs  # registers the environments
+
+env = gym.make("CCBench-v1", config_dict={"desired_goal": {"OD": 7.5}})
+obs, info = env.reset(seed=42)
+```
+
+The environment never terminates on its own; `terminated` is only used by `CCBench-v0` for the time
+limit. Observations are dicts with the keys `observation`, `achieved_goal` (target channels) and
+`desired_goal` (setpoints), each mapping channel names to floats. Actions can be given as a dict
+(all action channels) or as an array in the order of `env.unwrapped.action_control_map`.
+Rendering is not supported (`render_mode` must be None).
+
+Earlier versions of this package used the global `np.random` state and could not be seeded; data
+generated with them cannot be reproduced with either version.
+
+## Seeding and reproducibility
+
+All random channel generators (random walks, noise, sparse actions, random initial control values)
+draw from the environment's `np_random` generator; the global `np.random` state is not used.
+
+- `reset(seed=s)` reseeds the environment and starts the episode at `start_timestamp`; the same
+  seed, configuration and action sequence give an identical trajectory, independent of earlier
+  episodes.
+- `reset()` without seed continues the random number stream; the episode starts at midnight of the
+  day after the last timestep of the previous episode.
+- `reset(options={"episode_start": ...})` sets an explicit start timestamp (naive timestamps are
+  interpreted as UTC).
+- The `ExplorationAgent` (sparse random actions used by the data generator) takes a `seed` argument
+  and can be reseeded with `agent.reset(seed=s)`. The data generator (`gen_industry_benchmarks
+  ccbench`) derives the seeds of all episodes from the configured `seed`.
+
+## Warm-up
+
+Target channels depend on delayed control values, so their first values are undefined. With
+`warmup_steps: "auto"` (default), `reset()` performs as many hidden zero-action steps as needed for a
+finite initial observation (5 steps for the default configuration, at most 64). The warm-up steps
+are not counted in the episode steps and are excluded from `env.unwrapped.get_episode_data()`
+(unless `include_warmup=True`); `info["warmup_steps"]` reports their number. A fixed number of
+warm-up steps can be configured as an integer, `0` disables the warm-up.
+
+## Channels and units
+
+The units are nominal labels for the synthetic process; they make the value ranges plausible but
+the model is not a physical simulation. One step corresponds to `freq` (default one second).
+
+| Channel | Semantics | Unit | Limits |
+|---------|-----------|------|--------|
+| *BP_action*, *DS_action*, *HE_action* | action | mbar/step, m/min/step, kW/step | see above |
+| *BP* (blow pressure) | control | mbar | [ 5.0, 30.0 ] |
+| *DS* (drawing speed) | control | m/min | [ 1.0, 12.0 ] |
+| *HE* (heat) | control | kW | [ 0.0, 15.0 ] |
+| *AT* (ambient temperature) | state | °C | [ -20.0, 40.0 ] |
+| *OD* (outer diameter) | target | mm | [ 0.1, 15.0 ] |
+| *WT* (wall thickness) | target | mm | [ 0.01, 1.2 ] |
+| *wave* | temp (internal) | — | — |
+
+`reset()` returns this information as `info["channels"]` (also available as
+`env.unwrapped.channel_metadata`): semantics, limits, unit, step duration in seconds, the action
+channel of each control channel and the reward type (`vop_type`) of each target channel. The info
+of `step()` contains `step`, `timestamp` and `reward_terms` (reward contribution per target).
+
+## Configuration
+
+`gym.make(...)` and the factory `ibs.envs.ccbench.ccbench_env.create_ccbench_env` load the default
+configuration file (or `config_file`) and recursively merge `config_dict` and further keyword
+arguments into it: nested mappings are merged key by key, lists and other values are replaced and a
+value of `None` removes a key. So single parameters can be changed without repeating the whole
+channel specification, e.g. `config_dict={"process_spec": {"DS": {"cfa_init": 4.0}}}`. The merged
+configuration is validated, and all detected problems are reported in one `ValueError`.
+
+Environment settings:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `episode_length` | 1000 | number of steps until the episode is truncated |
+| `freq` | `1` | duration of one step: seconds or pandas offset string (e.g. `"1min"`) |
+| `start_timestamp` | `"2000-01-01T00:00:00Z"` | start of seeded and first episodes |
+| `truncate_on_time_limit` | `True` (v0: `False`) | report the time limit as truncated instead of terminated |
+| `warmup_steps` | `"auto"` (v0: `0`) | hidden zero-action steps before the initial observation |
+| `expose_temp_channels` | `False` (v0: `True`) | include temp channels in the observations |
+| `desired_goal` | midpoint of the target limits | setpoint per target channel, see below |
+
+Setpoints are configured per target channel as a value or as a schedule of `[step, value]` pairs,
+starting at step 0 with strictly increasing steps; the last pair with `step` not after the current
+episode step applies. They must lie within the target limits:
+
+```yaml
+desired_goal:
+    OD: 7.5
+    WT: [[0, 0.4], [500, 0.7]]
+```
+
+`reset(options={"desired_goal": {...}})` replaces the configured setpoints of the given targets for
+one episode, `step(action, desired_goal={...})` sets them for the remaining episode.
+
+Levers of the process specification (`process_spec.<channel>.<key>`) useful for varying the
+operating scenario:
+
+| Key | Channels | Meaning |
+|-----|----------|---------|
+| `cfa_init` | *BP*, *DS*, *HE* | initial control value, or range `[min, max]` for a random initial value |
+| `limits` | all | value range of the channel (control and target values are clipped to it) |
+| `rwo_offset`, `rwo_scales`, `rwo_decays` | *AT* | mean, step scale and decay of the ambient temperature random walk |
+| `af_kernel` | *AT*, *OD*, *WT* | filter kernel (smoothing for *AT*, delay structure for the targets) |
+| `wn_scale`, `wn_dist` | *OD*, *WT* | scale and distribution of the measurement noise |
+| `vop_type` | *OD*, *WT* | reward type: `setpoint`, `upper_limit` or `lower_limit` |
+
+String values of `fc_callback` and `af_kernel` are evaluated as Python expressions, so
+configuration files are trusted code and must not come from untrusted sources.
