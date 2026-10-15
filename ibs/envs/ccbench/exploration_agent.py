@@ -19,6 +19,7 @@ import pandas as pd
 
 from ibs.envs.ccbench import generators
 from ibs.common.sequences import is_sequence
+from ibs.envs.ccbench.config_utils import resolve_callbacks
 
 
 class ExplorationAgent(object):
@@ -43,11 +44,12 @@ class ExplorationAgent(object):
                     if temporary series are needed for the actual action series generation.
                   * limits - optional - if the size of the actions should be clipped to some interval after all modules
                     specified in `type`have been evaluated
-                Additionally, parameters for the individual generator modules can be included in this dict.
+                Additionally, parameters for the individual generator modules can be included in this dict. Callback
+                strings (`fc_callback`, `af_kernel`) are resolved via `ibs.envs.ccbench.config_utils.resolve_callbacks`.
             seed: seed for the agent's random number generator, which drives all random action generators. Use the
                 `seed` argument of `reset` to re-seed the agent for individual episodes.
         """
-        self.action_spec = {k: dict(v) for k, v in action_spec.items()}
+        self.action_spec = resolve_callbacks(action_spec)
         for spec in self.action_spec.values():
             if not is_sequence(spec["type"]):
                 spec["type"] = [spec["type"]]

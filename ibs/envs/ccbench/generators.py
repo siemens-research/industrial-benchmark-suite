@@ -560,7 +560,7 @@ class function_callback(ChannelGenerator):
                 )
             )
         except (RuntimeError, IndexError) as e:
-            logger.warning(f"callback function evaluation resulted in exception: {e}")
+            logger.debug("callback function evaluation resulted in exception: %s", e)
             new_val = np.nan
         return new_val
 
