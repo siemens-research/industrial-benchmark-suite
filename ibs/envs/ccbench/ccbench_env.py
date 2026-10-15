@@ -35,6 +35,7 @@ from .config_utils import desired_goal_errors
 from .config_utils import parse_freq
 from .config_utils import resolve_callbacks
 from .config_utils import validate_ccbench_config
+from .history import EpisodeHistory
 
 DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config/ccbench_default.yaml"
 DEFAULT_START_TIMESTAMP = "2000-01-01T00:00:00Z"
@@ -165,7 +166,7 @@ class CCBenchEnv(GoalEnv):
         self.desired_goal: Optional[Dict[str, float]] = None
         self._explicit_goal: Optional[Dict[str, float]] = None
         self._warmup_rows = 0
-        self.history: Dict[str, pd.Series] = {}
+        self.history: EpisodeHistory
         self.replay: Optional[pd.DataFrame] = None
         self._generators: Dict[str, List[generators.ChannelGenerator]] = {}
         self.reset(perform_step=False)
@@ -273,9 +274,12 @@ class CCBenchEnv(GoalEnv):
         self._warmup_rows = 0
 
         # setup empty history and new generator instances for all channels
-        self.history = {
-            k: pd.Series([], dtype=np.float64, name=k, index=pd.DatetimeIndex([], tz="UTC")) for k in self.process_spec
-        }
+        self.history = EpisodeHistory(
+            start=self._episode_start,
+            freq=self.timestep_size,
+            capacity=self._expected_rows(),
+            channels=self.process_spec,
+        )
         self._generators = self._build_generators(self.np_random, replay)
 
         if not perform_step:
@@ -416,16 +420,14 @@ class CCBenchEnv(GoalEnv):
                 if not last and self.keep_intermediate_series:
                     key = self.intermediate_map[k][j]
                     if key not in self.history:
-                        self.history[key] = pd.Series(
-                            [], dtype=np.float64, name=key, index=pd.DatetimeIndex([], tz="UTC")
-                        )
-                    self.history[key].loc[cur_ts] = cast(float, new_val)  # type: ignore[index]
+                        self.history.add_channel(key)
+                    self.history.append(key, cur_ts, cast(float, new_val))
             new_val = float(new_val)  # type: ignore[arg-type]
             if "limits" in spec:
                 low, high = spec["limits"]
                 new_val = float(np.clip(new_val, low, high))
             # actions and control values are "input" and belong to the previous timestep, see get_episode_data()
-            self.history[k].loc[cur_ts] = new_val  # type: ignore[index]
+            self.history.append(k, cur_ts, new_val)
             if spec["semantics"] != "objective":
                 values[k] = new_val
             if spec["semantics"] == "target":
@@ -433,6 +435,12 @@ class CCBenchEnv(GoalEnv):
 
         self.next_timestep = cur_ts + self.timestep_size
         return values, goal_values
+
+    def _expected_rows(self) -> int:
+        """Number of history rows of an episode (warm-up, initial and agent steps) to preallocate."""
+        warmup = MAX_AUTO_WARMUP_STEPS if self.warmup_steps == "auto" else int(self.warmup_steps)
+        episode_length = self.max_episode_steps if self.max_episode_steps is not None else 1000
+        return warmup + episode_length + 1
 
     def _make_observation(self, values: Mapping[str, float], goal_values: Mapping[str, float]) -> Dict[str, Any]:
         """Assemble the goal-env observation dict from computed channel values."""
