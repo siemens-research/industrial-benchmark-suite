@@ -46,7 +46,9 @@ def test_generators_ignore_global_numpy_state():
 
 
 def test_control_init_range_uses_injected_rng():
-    first = generators.control_from_actions(channel_name="DS", spec={"cfa_init": [2.0, 10.0]}, rng=np.random.default_rng(5))
+    first = generators.control_from_actions(
+        channel_name="DS", spec={"cfa_init": [2.0, 10.0]}, rng=np.random.default_rng(5)
+    )
     second = generators.control_from_actions(
         channel_name="DS", spec={"cfa_init": [2.0, 10.0]}, rng=np.random.default_rng(5)
     )
@@ -71,7 +73,9 @@ def test_sag_limits_are_respected():
 
 
 def test_explicit_zero_arguments_are_kept():
-    spike = generators.spike_action_gen(scale=0.0, channel_name="a", spec={"sag_scale": 5.0}, rng=np.random.default_rng(0))
+    spike = generators.spike_action_gen(
+        scale=0.0, channel_name="a", spec={"sag_scale": 5.0}, rng=np.random.default_rng(0)
+    )
     np.testing.assert_array_equal(_draw(spike), 0.0)
 
     noise = generators.white_noise(scale=0.0, channel_name="b", spec={"wn_scale": 5.0}, rng=np.random.default_rng(0))

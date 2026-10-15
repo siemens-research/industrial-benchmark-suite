@@ -7,6 +7,7 @@ Author:
     Holger Schoener <holger.schoener@siemens.com>
 """
 
+import copy
 import datetime as dt
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,6 @@ from typing import Dict
 from typing import List
 from typing import Mapping
 from typing import Optional
-from typing import Sequence
 from typing import Tuple
 from typing import Union
 from typing import cast
@@ -30,9 +30,16 @@ from ibs.common.sequences import is_sequence
 from . import generators
 from .config_utils import resolve_callbacks
 
+DEFAULT_START_TIMESTAMP = "2000-01-01T00:00:00Z"
+
 
 class CCBenchEnv(GoalEnv):
-    """Goal-based synthetic time-series environment driven by a channel specification."""
+    """Goal-based synthetic time-series environment driven by a channel specification.
+
+    All random numbers are drawn from the environment's `np_random` generator, so `reset(seed=...)` makes the
+    following episode reproducible. A seeded reset starts the episode at the configured `start_timestamp`, an unseeded
+    reset continues the random stream and starts the episode `episode_step` after the end of the previous one.
+    """
 
     def __init__(
         self,
@@ -56,9 +63,7 @@ class CCBenchEnv(GoalEnv):
         if process_spec is None:
             raise ValueError("process_spec must be provided directly or via config")
 
-        start_timestamp = None
-        if "start_timestamp" in config and config["start_timestamp"] is not None:
-            start_timestamp = _coerce_timestamp(config["start_timestamp"])
+        start_timestamp = config.get("start_timestamp")
         freq = config.get("freq")
         episode_step = config.get("episode_step")
         render_file = config.get("render_file")
@@ -67,11 +72,15 @@ class CCBenchEnv(GoalEnv):
 
         if "action_spec" in config:
             process_spec = _apply_action_limits(process_spec, config["action_spec"])
-        process_spec = resolve_callbacks(process_spec)
+        process_spec = resolve_callbacks(copy.deepcopy(dict(process_spec)))
 
-        self.process_spec = {k: dict(v) for k, v in process_spec.items()}
-        self.cur_timestep = None
-        self.next_timestep = None
+        self.process_spec: Dict[str, Dict[str, Any]] = {k: dict(v) for k, v in process_spec.items()}
+        self.start_timestamp = _coerce_timestamp(
+            start_timestamp if start_timestamp is not None else DEFAULT_START_TIMESTAMP
+        )
+        self.cur_timestep: Optional[pd.Timestamp] = None
+        self.next_timestep: Optional[pd.Timestamp] = None
+        self._episode_start: Optional[pd.Timestamp] = None
         self.timestep_size = freq or pd.Timedelta(seconds=1)
         self.episode_step_size = episode_step or pd.DateOffset(days=1, normalize=True)
         self.keep_intermediate_series = keep_intermediate_series
@@ -89,6 +98,7 @@ class CCBenchEnv(GoalEnv):
         self.context_channels = [k for k, spec in self.process_spec.items() if spec["semantics"] == "context"]
         self.temp_channels = [k for k, spec in self.process_spec.items() if spec["semantics"] == "temp"]
         self.target_obj_map = {k: f"{k}_obj" for k, spec in self.process_spec.items() if spec["semantics"] == "target"}
+        self._complete_process_spec()
 
         self.metadata["render.modes"] = ["human"]
         self.render_file = render_file
@@ -109,7 +119,7 @@ class CCBenchEnv(GoalEnv):
 
         state_space: Dict[str, gym.spaces.Space] = {
             k: get_box_space(k)
-            for k in (list(self.process_spec.keys()) + list(self.target_obj_map.values()))
+            for k in self.process_spec.keys()
             if (k not in self.action_control_map or self.action_control_map[k] is None)
             and (k not in self.target_obj_map.values())
         }
@@ -122,18 +132,59 @@ class CCBenchEnv(GoalEnv):
         )
         self.action_space = gym.spaces.Dict({k: get_box_space(k) for k, c in self.action_control_map.items()})
 
-        self.index = []
-        self.desired_goal = None
-        self.history = {}
-        self.replay = None
-        self.reset(episode_start=start_timestamp, perform_step=False)
-
+        # names of intermediate series only depend on generator parameters, not on random draws
         self.intermediate_map = {
-            k: (
-                []
-                if not isinstance(spec["type"], Sequence)
-                else [f"{k}_{gen.info_str(verbosity=2)}" for gen in spec["generator"][:-1]]
-            )
+            k: [f"{k}_{gen.info_str(verbosity=2)}" for gen in gens[:-1]]
+            for k, gens in self._build_generators(np.random.default_rng(0)).items()
+        }
+
+        self.index: List[pd.Timestamp] = []
+        self.desired_goal: Optional[Dict[str, float]] = None
+        self.history: Dict[str, pd.Series] = {}
+        self.replay: Optional[pd.DataFrame] = None
+        self._generators: Dict[str, List[generators.ChannelGenerator]] = {}
+        self.reset(perform_step=False)
+
+    def _complete_process_spec(self) -> None:
+        """Normalize generator types to lists and add channel entries for actions without spec and objectives."""
+        for k in self.action_control_map:
+            if k not in self.process_spec:
+                self.process_spec[k] = dict(type=[], semantics="action")
+        for k, o in self.target_obj_map.items():
+            if o not in self.process_spec:
+                self.process_spec[o] = dict(
+                    type=[],
+                    semantics="objective",
+                    assoc_target_channel=k,
+                    limits=self.process_spec[k].get("limits", [-np.inf, np.inf]),
+                )
+        for k, spec in self.process_spec.items():
+            if not is_sequence(spec["type"]):
+                spec["type"] = [spec["type"]]
+            non_available = [typ for typ in spec["type"] if typ not in generators.__dict__]
+            if len(non_available) > 0:
+                raise ValueError(
+                    f"The following generators are not available (key 'type' of specification for '{k}'): {non_available}"
+                )
+
+    def _build_generators(
+        self, rng: np.random.Generator, replay: Optional[pd.DataFrame] = None
+    ) -> Dict[str, List[generators.ChannelGenerator]]:
+        """Create fresh channel generator instances for all channels, drawing random numbers from `rng`."""
+        return {
+            k: [
+                generators.__dict__[typ](
+                    channel_name=k,
+                    spec=spec,
+                    replay=(
+                        replay[k]
+                        if ((i == len(spec["type"]) - 1) and replay is not None and k in replay.columns)
+                        else None
+                    ),
+                    rng=rng,
+                )
+                for i, typ in enumerate(spec["type"])
+            ]
             for k, spec in self.process_spec.items()
         }
 
@@ -149,80 +200,45 @@ class CCBenchEnv(GoalEnv):
         """Reset the environment state and optionally perform the first step.
 
         Args:
-            seed: RNG seed forwarded to the base environment.
-            options: Optional reset options passed to the base class.
-            episode_start: Explicit start timestamp. If omitted, a suitable day
-                boundary is chosen.
-            perform_step: If True, performs one step with NaN actions to return
-                a valid initial observation.
+            seed: RNG seed for the environment's `np_random` generator, which drives all random channel generators.
+                With a seed, the episode starts at `start_timestamp` (unless specified otherwise) and is reproducible.
+            options: Optional reset options. Supported key: `episode_start` (timestamp, same as the `episode_start`
+                argument, taking precedence over it).
+            episode_start: Explicit start timestamp. If omitted, seeded resets and the first episode start at
+                `start_timestamp`, unseeded resets start `episode_step` after the last timestep of the previous
+                episode. Naive timestamps are interpreted as UTC.
+            perform_step: If True, performs one step with zero actions to return a valid initial observation.
             replay: Optional DataFrame indexed by timestamps to replay channels.
                 If provided, `episode_start` is derived from its index.
         """
         super().reset(seed=seed, options=dict(options) if options is not None else None)
-
-        self.step_count = 0
+        options = dict(options) if options is not None else {}
 
         # find specified or suitable episode start timestamp
         if replay is not None:
-            episode_start = replay.index.min()
-            self.replay = replay
+            start_ts = replay.index.min()
+        elif options.get("episode_start") is not None:
+            start_ts = options["episode_start"]
+        elif episode_start is not None:
+            start_ts = episode_start
+        elif seed is not None or self._episode_start is None:
+            start_ts = self.start_timestamp
         else:
-            if episode_start is None and self.cur_timestep is None:
-                episode_start = pd.Timestamp.now(tz="UTC").floor(freq="1D")
-            self.replay = None
+            last_ts = self.cur_timestep if self.cur_timestep is not None else self._episode_start
+            start_ts = last_ts + self.episode_step_size
+        self._episode_start = _coerce_timestamp(start_ts)
+        self.replay = replay
+        self.next_timestep = self._episode_start
+        self.cur_timestep = None
+        self.index = []
+        self.step_count = 0
+        self.desired_goal = None
 
-        if len(self.index) > 0 or len(self.history) < 1 or replay is not None:
-            # reset is necessary because old episode exists, or nothing has been setup at all so far, or
-            # a new replay data set has been specified
-            base_ts = episode_start or self.cur_timestep
-            if base_ts is None:
-                base_ts = pd.Timestamp.now(tz="UTC").floor(freq="1D")
-            self.next_timestep = base_ts
-            if episode_start is None:
-                self.next_timestep = base_ts + self.episode_step_size
-            self.cur_timestep = None
-            self.index = []
-
-            # setup empty history for all channels
-            self.history = {
-                k: pd.Series([], dtype=np.float32, name=k, index=pd.DatetimeIndex([], tz="utc"))
-                for k, spec in self.process_spec.items()
-            }
-            for k, c in self.action_control_map.items():
-                if k not in self.history:
-                    self.history[k] = pd.Series([], dtype=np.float32, name=k, index=pd.DatetimeIndex([], tz="utc"))
-                    self.process_spec[k] = dict(type=[], semantics="action")
-            for k, o in self.target_obj_map.items():
-                if o not in self.history:
-                    self.history[o] = pd.Series([], dtype=np.float32, name=k, index=pd.DatetimeIndex([], tz="utc"))
-                    self.process_spec[o] = dict(
-                        type=[],
-                        semantics="objective",
-                        assoc_target_channel=k,
-                        limits=self.process_spec[k].get("limits", [-np.inf, np.inf]),
-                    )
-
-            # create individual channel generator instances
-            for k, spec in self.process_spec.items():
-                if not is_sequence(spec["type"]):
-                    spec["type"] = [spec["type"]]
-                non_available = [typ for typ in spec["type"] if typ not in generators.__dict__]
-                if len(non_available) > 0:
-                    raise ValueError(
-                        f"The following generators are not available (key 'type' of specification for '{k}'): {non_available}"
-                    )
-                spec["generator"] = [
-                    generators.__dict__[typ](
-                        channel_name=k,
-                        spec=spec,
-                        replay=(
-                            replay[k]
-                            if ((i == len(spec["type"]) - 1) and replay is not None and k in replay.columns)
-                            else None
-                        ),
-                    )
-                    for i, typ in enumerate(spec["type"])
-                ]
+        # setup empty history and new generator instances for all channels
+        self.history = {
+            k: pd.Series([], dtype=np.float64, name=k, index=pd.DatetimeIndex([], tz="UTC")) for k in self.process_spec
+        }
+        self._generators = self._build_generators(self.np_random, replay)
 
         if perform_step:
             # observation, _, terminated, truncated, info = self.step({k: np.nan for k in self.action_control_map.keys()})
@@ -276,8 +292,6 @@ class CCBenchEnv(GoalEnv):
         goal_values: Dict[str, float] = {}
         # iterate generation of current channel values for each channel
         for k, spec in self.process_spec.items():
-            if not is_sequence(spec["type"]):
-                spec["type"] = [spec["type"]]
             new_val = None
             if spec["semantics"] == "action":
                 new_val = action[k] if action_is_dict else action[list(self.action_control_map.keys()).index(k)]
@@ -290,7 +304,7 @@ class CCBenchEnv(GoalEnv):
             if spec["semantics"] == "objective":
                 new_val = self.desired_goal[spec["assoc_target_channel"]]
             # compute chain of channel generators for the current channel
-            for j, gen in enumerate(spec["generator"]):
+            for j, gen in enumerate(self._generators[k]):
                 old_val = new_val
                 new_val = gen.step(timestep=self.cur_timestep, history=self.history, cur_val=new_val)
                 if not isinstance(new_val, (float, int)):
@@ -299,13 +313,13 @@ class CCBenchEnv(GoalEnv):
                         f"number, but {str(new_val)} when called at timestep {self.cur_timestep} "
                         f"with cur_val={str(old_val)}"
                     )
-                last = j == len(spec["generator"]) - 1
+                last = j == len(self._generators[k]) - 1
                 if not last and self.keep_intermediate_series:
                     # key = f"{k}_{gen.info_str()}"
                     key = self.intermediate_map[k][j]
                     if key not in self.history:
                         self.history[key] = pd.Series(
-                            [], dtype=np.float32, name=key, index=pd.DatetimeIndex([], tz="utc")
+                            [], dtype=np.float64, name=key, index=pd.DatetimeIndex([], tz="UTC")
                         )
                     self.history[key].loc[cur_ts] = cast(float, new_val)  # type: ignore[index]
             if "limits" in spec:
@@ -414,14 +428,14 @@ def _apply_action_limits(
     return merged
 
 
-def _coerce_timestamp(value: Any) -> dt.datetime:
-    if isinstance(value, dt.datetime):
-        return value
-    if isinstance(value, pd.Timestamp):
-        return value.to_pydatetime()
-    if isinstance(value, str):
-        return pd.Timestamp(value).to_pydatetime()
-    raise TypeError(f"Unsupported start_timestamp type: {type(value).__name__}")
+def _coerce_timestamp(value: Any) -> pd.Timestamp:
+    """Convert a timestamp-like value to a UTC `pd.Timestamp` (naive values are interpreted as UTC)."""
+    if not isinstance(value, (str, dt.datetime, dt.date, pd.Timestamp, np.datetime64)):
+        raise TypeError(f"Unsupported timestamp type: {type(value).__name__}")
+    ts = pd.Timestamp(value)
+    if ts is pd.NaT:
+        raise ValueError(f"Invalid timestamp: {value!r}")
+    return ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
 
 
 def create_ccbench_env(**kwargs) -> CCBenchEnv:
