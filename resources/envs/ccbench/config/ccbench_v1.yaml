@@ -1,0 +1,204 @@
+# CCBench-v1 configuration: same process model as ccbench_default.yaml (CCBench-v0 and data generation), with the
+# channel formulas expressed as data (generators lagged_terms, modulated_sine and apply_filter with af_window) instead
+# of Python code strings, so that lags, coefficients and filters can be validated and varied without code.
+
+# string used in log messages, result file names, etc.
+#id:              "artificial_process_data_{date:%Y-%m-%d}"
+id:              "tfmdata"
+# output directory for the data generator. This directory is automatically generated.
+# variable is usable in further filenames by python-format ("{}") syntax, is relative to script directory, not config directory!
+data_dir:        "./data"
+# where should generated data be placed?
+export_filename: "{data_dir}/gen_process_data.parquet"
+# logging is also sent to this file
+log_file:        "{data_dir}/gen_process_data.log"
+
+# how many non-adjacent time periods should be generated?
+# When comparing a generator episode to real data, the equavalent could e.g. be recordings from different example days
+# within a year, a curated "best of" compilation of interesting cases etc. - the timely order of episodes is unknown
+# episodes:        100
+episodes:        5
+#episodes:        1
+# how long (seconds) should each episode be?
+# episode_length:  5000
+episode_length:  1000
+#episode_length:  500
+
+# environment settings (CCBench-v1 defaults; CCBench-v0 uses truncate_on_time_limit=False, warmup_steps=0 and
+# expose_temp_channels=True)
+# duration of one step: number of seconds or pandas offset string (e.g. "1s", "1min"); units of the action channels
+# below ("per step") refer to this duration
+freq:            1
+# start of the first episode and of each episode reset with a seed; naive timestamps are interpreted as UTC
+start_timestamp: "2000-01-01T00:00:00Z"
+# report reaching episode_length as truncated (True) or as terminated (False, legacy)
+#truncate_on_time_limit: True
+# number of hidden zero-action steps before the initial observation, "auto" until all observations are finite
+#warmup_steps:    "auto"
+# include channels with semantics "temp" (e.g. "wave") in observations and observation space?
+#expose_temp_channels: False
+# setpoints of the target channels: value or schedule [[step, value], ...] (starting at step 0) per target channel;
+# targets without entry use the midpoint of their limits. Can be overridden per episode via reset(options=...).
+#desired_goal:
+#    OD: 7.5
+#    WT: [[0, 0.4], [500, 0.7]]
+# include data of channels marked as semantics="temp" in the process_spec below?
+include_temporary:    False
+# include data of channels only computed as intermediate channel values in chains specified in process_spec type lists?
+include_intermediate: False
+# include_intermediate: True
+
+# random seed for data generation; per-episode seeds for the environment and the exploration agent are derived from it
+seed: 729256
+
+# call plt.show() for each figure?
+show_plots:      False
+# save generated plots to files?
+save_plots:      True
+# return a list of generated figures?
+return_plots:    False
+# should timeseries plots also show (indented) intermediate series? Only relevant if include_temporary above is True
+# plot_with_intermediates: False
+plot_with_intermediates: True
+# should timeseries plots also show temporary series only relevant for computation of other series? Only relevant if include_temporary above is True
+# plot_with_temporaries: False
+plot_with_temporaries: True
+# plot dimensions [inch] and resolution [dots per inch]
+plot_width:      25
+plot_height:     3
+dpi:             150
+
+# controls specification, keys are names of generated series. Each requires a "type", corresponding to a data generation
+# function in generators.py, or to a list of these. Other keys contain parameters for these functions.
+action_spec:
+    "BP_action": # example time series where we combine a kind of random walk with a RELU approximation
+                 # (custom functions like this can be provided as lambda via function_callback type and fc_callback parameter
+                 # in trusted config files, see ccbench_default.yaml)
+        # general action/process channel specification
+        type:        ["spike_action_gen", "controls_exponential_action_scaler"]
+        #temp:        False            # temporary channel which should not be used as action/process channel but is needed as input to other channel computations
+        semantics:   "action"         # Which kind of channel does this correspond to? "action", "temp"
+        limits:      [-4.0, 4.0]      # to which interval should the resulting action values (after transformation/scaling/offset) be limited?
+        unit:        "mbar/step"
+        # spike_action_gen arguments
+        sag_stepslen:     10          # how long is the control not changed (action=0) after an action?
+        sag_action_prob:  0.2         # what is the probability of a action after stepslen have passed since the last action?
+        sag_dist:         "normal"    # how should the generated spike values be distributed
+        sag_scale:        2.0         # how should the distribution be scaled (multiplication of generated random values)
+        sag_offset:       0.0         # what should be added to the generated and scaled random action values?
+        # controls_exponential_action_scaler arguments
+        ceas_assoc_ctrl_channel: "BP" # which is the control channel (in process_spec) for which the actions should be generated?
+        ceas_decay:       0.1         # by which factor should the cumulated generated raw steps be decayed (only if current step != 0.0 at all)
+        ceas_offset:      25          # mean = exp(0.1*25) ~ 12   # offset term of the unscaled raw control values before taking exponential
+        ceas_factor:      0.1         # scaling of offsetted raw control values before taking the exponential
+        ceas_ctrl_limits: [5.0, 30.0] # clipping of action such that generated transformed control channel values are in these limits
+    "DS_action":
+        type:        ["spike_action_gen", "controls_limiter"]
+        semantics:   "action"
+        limits:      [-3.0, 3.0]
+        unit:        "m/min/step"
+        # spike_action_gen arguments
+        sag_stepslen:     12
+        sag_action_prob:  0.1
+        sag_dist:         "uniform"
+        sag_scale:        2.0
+        sag_offset:       0.0
+        sag_limits:       [-3.0, 3.0]
+        # controls_limiter arguments
+        cl_assoc_ctrl_channel: "DS"   # which is the control channel (in process_spec) for which the actions should be generated?
+        cl_offset:        5.0         # desired mean of the resulting control values (to which decay should drive the control values)
+        cl_decay:         0.1         # by which factor should the cumulated generated control values be decayed (only if current step != 0.0 at all)
+        cl_ctrl_limits:   [1.0, 12.0] # clipping of action such that resulting control channel values are in these limits
+    "HE_action": # random walk smoothed by filtering it with a bell-shaped curve, then taking differences to obtain actions
+        type:        ["random_walk_overlay", "apply_filter", "differences", "controls_limiter"]
+        semantics:   "action"
+        limits:      [-0.1, 0.1]
+        unit:        "kW/step"
+        rwo_offset:  5.0
+        rwo_steplen: [1]
+        rwo_scales:  [6.0]
+        rwo_decays:  [0.15]
+        rwo_dists:   "normal"
+        af_window:   {name: "hann", length: 500}  # = norm_filter(signal.windows.hann(500))
+        # controls_limiter arguments
+        cl_assoc_ctrl_channel: "HE"
+        cl_ctrl_limits:   [0.0, 15.0]
+
+# process specification, keys are names of generated series. Each requires a "type", corresponding to a data generation
+# function in generators.py, or to a list of these. Other keys contain parameters for these functions.
+process_spec:
+    "BP": # control channel resulting from the actions specified in BP_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"    # Which kind of channel does this correspond to? "control", "action", "target", "state", "context", "temp"
+        assoc_action_channel: "BP_action"   # which is the action channel to be used as source for control changes of this channel?
+        limits:      [5.0, 30.0]  # what are the limits not to be exceeded by values of this control channel?
+        unit:        "mbar"  # nominal unit of the synthetic process
+        cfa_init:    12.0         # what value should be used as initial value for this control channel? one of <initial-value>, [<min>, <max-of-random-initialization>]
+    "DS": # control channel resulting from the actions specified in DS_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"
+        assoc_action_channel: "DS_action"
+        limits:      [1.0, 12.0]
+        unit:        "m/min"
+        cfa_init:    [2.0, 10.0]
+    "HE": # control channel resulting from the actions specified in HE_action channel
+        type:        ["control_from_actions"]
+        semantics:   "control"
+        assoc_action_channel: "HE_action"
+        limits:      [0.0, 15.0]
+        unit:        "kW"
+        cfa_init:    [2.0, 12.0]
+    "AT": # random walk smoothed by filtering it with a bell-shaped curve
+        type:        ["random_walk_overlay", "apply_filter"]
+        semantics:   "state"
+        limits:      [-20.0, 40.0]
+        unit:        "°C"
+        rwo_offset:  5.0
+        rwo_steplen: [1]
+        rwo_scales:  [5.0]
+        rwo_decays:  [0.1]
+        rwo_dists:   "normal"
+        af_window:   {name: "hann", length: 300}  # = norm_filter(signal.windows.hann(300))
+    "wave": # sine wave with an amplitude modulated by the HE series, to craft correlations into the time series:
+            # wave[t] = 0.2 * exp(0.2 * HE[t] - 1.0) * sin(1.0 * s + 0.0), s = seconds since the first step
+        type:        "modulated_sine"
+        semantics:   "temp"
+        ms_input:    "HE"
+        ms_amplitude: 0.2
+        ms_exp_scale: 0.2
+        ms_exp_offset: -1.0
+        ms_angular_frequency: 1.0
+        ms_phase:    0.0
+    "OD": # use a filter to shape a time series that correlates with three inputs via a varying lag and add some noise
+        type:          ["lagged_terms", "apply_filter", "white_noise"]
+        semantics:     "target"
+        vop_type:      "setpoint"     # type of reward for this target: "setpoint", "upper_limit", "lower_limit"
+        limits:        [0.1, 15.0]
+        unit:        "mm"
+        # OD[t] = wave[t] + 1.5 * BP[t-3] / DS[t-1] + 0.1 * AT[t], i.e. sum of coef * product of factors, each factor
+        # (offset + scale * input[t - lag]) ** power; lag 0 only for channels computed before OD (BP, DS, HE, AT, wave)
+        lt_terms:
+            - {coef: 1.0, factors: [{input: "wave"}]}
+            - {coef: 1.5, factors: [{input: "BP", lag: 3}, {input: "DS", lag: 1, power: -1}]}
+            # variable transport delay instead of the fixed BP lag (plug flow: lag = steps until DS has transported
+            # the material by 0.25 m, DS in m/min, 1 s steps): about 15 / 3 / 2 steps at DS = 1 / 5 / 12 m/min
+            #- {coef: 1.5, factors: [{input: "BP", transport: {speed: "DS", distance: 0.25, speed_scale: 0.0166667,
+            #                                                  min_lag: 1, max_lag: 20}},
+            #                        {input: "DS", lag: 1, power: -1}]}
+            - {coef: 0.1, factors: [{input: "AT"}]}
+        af_kernel:     [0,0,0,0.1,0.25,0.35,0.2,0.1]
+        wn_scale:      0.1
+        wn_dist:       "normal"
+    "WT":
+        type:          ["lagged_terms", "white_noise", "apply_filter"]
+        semantics:     "target"
+        vop_type:      "setpoint"
+        limits:        [0.01, 1.2]
+        unit:        "mm"
+        # WT[t] = 15.0 / BP[t-5] / DS[t-2] / (1.0 - 0.02 * AT[t])
+        lt_terms:
+            - {coef: 15.0, factors: [{input: "BP", lag: 5, power: -1}, {input: "DS", lag: 2, power: -1},
+                                     {input: "AT", offset: 1.0, scale: -0.02, power: -1}]}
+        wn_scale:      0.02
+        wn_dist:       "normal"
+        af_kernel:     [0,-0.2,-0.1,0.2,0.25,0.25,0.2,0.2,0.1]

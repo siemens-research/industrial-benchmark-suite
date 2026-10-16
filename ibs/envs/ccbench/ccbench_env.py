@@ -30,6 +30,7 @@ from ibs.common.sequences import is_sequence
 
 from . import generators
 from .config_utils import channel_metadata
+from .config_utils import code_strings
 from .config_utils import deep_merge
 from .config_utils import desired_goal_errors
 from .config_utils import parse_freq
@@ -37,7 +38,11 @@ from .config_utils import resolve_callbacks
 from .config_utils import validate_ccbench_config
 from .history import EpisodeHistory
 
-DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config/ccbench_default.yaml"
+_CONFIG_DIR = Path(__file__).resolve().parents[3] / "resources/envs/ccbench/config"
+# default config of CCBench-v1, without code strings
+DEFAULT_CONFIG_FILE = _CONFIG_DIR / "ccbench_v1.yaml"
+# config of CCBench-v0 and of the data generation, with the channel formulas as code strings
+LEGACY_V0_CONFIG_FILE = _CONFIG_DIR / "ccbench_default.yaml"
 DEFAULT_START_TIMESTAMP = "2000-01-01T00:00:00Z"
 # maximum number of hidden warm-up steps for `warmup_steps="auto"`
 MAX_AUTO_WARMUP_STEPS = 64
@@ -72,6 +77,8 @@ class CCBenchEnv(GoalEnv):
             config_file: Optional YAML file providing configuration values.
             config_dict: Optional mapping of configuration values, replacing top-level keys of `config_file` (use
                 `create_ccbench_env` for merging nested values). Without both, the default config file is used.
+                Code strings (`fc_callback`, `af_kernel`) of both are evaluated, so they must come from trusted
+                sources (see `ibs.envs.ccbench.config_utils.resolve_callbacks`).
             render_mode: Must be None, the environment does not support rendering.
 
         Raises:
@@ -593,6 +600,7 @@ def create_ccbench_env(
     config_file: Optional[Path | str] = None,
     config_dict: Optional[Mapping[str, Any]] = None,
     render_mode: Optional[str] = None,
+    trusted_code: bool = False,
     **overrides,
 ) -> CCBenchEnv:
     """Factory function to create the CCBench environment (`CCBench-v1` defaults) from a configuration.
@@ -601,46 +609,63 @@ def create_ccbench_env(
     `ibs.envs.ccbench.config_utils.deep_merge`), so that e.g. `{"process_spec": {"DS": {"cfa_init": 4.0}}}` changes a
     single parameter. Lists are replaced, a None value removes a key.
 
+    Code strings (`fc_callback` and `af_kernel` given as strings) are evaluated as Python expressions. They are
+    accepted from `config_file`, which must therefore come from a trusted source, but are rejected in `config_dict` and
+    `overrides` unless `trusted_code` is True. Use the data-only generators (e.g. `lagged_terms`, `af_window`) instead.
+
     Args:
-        config_file: YAML config file, defaults to the default CCBench config file.
+        config_file: YAML config file, defaults to `DEFAULT_CONFIG_FILE` (without code strings).
         config_dict: Nested configuration overrides.
         render_mode: Must be None, the environment does not support rendering.
+        trusted_code: Accept code strings in `config_dict` and `overrides`.
         **overrides: Further top-level configuration overrides (e.g. `episode_length`, `desired_goal`).
 
     Returns:
         The configured environment.
 
     Raises:
-        ValueError: if the merged configuration is invalid.
+        ValueError: if the merged configuration is invalid, or if `config_dict` or `overrides` contain code strings
+            and `trusted_code` is False.
     """
-    return CCBenchEnv(config_dict=_merged_config(config_file, config_dict, overrides), render_mode=render_mode)
+    config = _merged_config(config_file, config_dict, overrides, trusted_code=trusted_code)
+    return CCBenchEnv(config_dict=config, render_mode=render_mode)
 
 
 def create_ccbench_env_v0(
     config_file: Optional[Path | str] = None,
     config_dict: Optional[Mapping[str, Any]] = None,
     render_mode: Optional[str] = None,
+    trusted_code: bool = False,
     **overrides,
 ) -> CCBenchEnv:
-    """Factory function to create the CCBench environment with the legacy API flags of `CCBench-v0`.
+    """Factory function to create the CCBench environment with the legacy configuration and API flags of `CCBench-v0`.
 
-    Same as `create_ccbench_env`, but `LEGACY_V0_FLAGS` are used where neither the config file nor the overrides set
-    these flags: reaching `episode_length` is reported as terminated, there is no warm-up (initial observations of the
-    target channels are NaN) and the temp channels (e.g. "wave") are included in the observations.
+    Same as `create_ccbench_env`, but the config file defaults to `LEGACY_V0_CONFIG_FILE` (channel formulas as code
+    strings), and `LEGACY_V0_FLAGS` are used where neither the config file nor the overrides set these flags:
+    reaching `episode_length` is reported as terminated, there is no warm-up (initial observations of the target
+    channels are NaN) and the temp channels (e.g. "wave") are included in the observations.
 
     Args:
-        config_file: YAML config file, defaults to the default CCBench config file.
+        config_file: YAML config file, defaults to `LEGACY_V0_CONFIG_FILE`.
         config_dict: Nested configuration overrides.
         render_mode: Must be None, the environment does not support rendering.
+        trusted_code: Accept code strings in `config_dict` and `overrides`.
         **overrides: Further top-level configuration overrides (e.g. `episode_length`, `desired_goal`).
 
     Returns:
         The configured environment.
 
     Raises:
-        ValueError: if the merged configuration is invalid.
+        ValueError: if the merged configuration is invalid, or if `config_dict` or `overrides` contain code strings
+            and `trusted_code` is False.
     """
-    config = _merged_config(config_file, config_dict, overrides, defaults=LEGACY_V0_FLAGS)
+    config = _merged_config(
+        config_file if config_file is not None else LEGACY_V0_CONFIG_FILE,
+        config_dict,
+        overrides,
+        defaults=LEGACY_V0_FLAGS,
+        trusted_code=trusted_code,
+    )
     return CCBenchEnv(config_dict=config, render_mode=render_mode)
 
 
@@ -649,7 +674,16 @@ def _merged_config(
     config_dict: Optional[Mapping[str, Any]],
     overrides: Mapping[str, Any],
     defaults: Optional[Mapping[str, Any]] = None,
+    trusted_code: bool = False,
 ) -> Dict[str, Any]:
+    if not trusted_code:
+        untrusted = [f"config_dict: {p}" for p in code_strings(config_dict or {})]
+        untrusted += [f"overrides: {p}" for p in code_strings(overrides)]
+        if untrusted:
+            raise ValueError(
+                "Code strings are only accepted from config files or with trusted_code=True, found:\n- "
+                + "\n- ".join(untrusted)
+            )
     config = load_config(config_file=config_file if config_file is not None else DEFAULT_CONFIG_FILE)
     config = deep_merge(defaults or {}, config)
     return deep_merge(deep_merge(config, config_dict), overrides)

@@ -23,6 +23,16 @@ import pandas as pd
 from ibs.common.config import load_config
 
 _CALLBACK_KEYS = ("fc_callback", "af_kernel")
+# maximum lag (in timesteps) of `lagged_terms` factors, below `ccbench_env.MAX_AUTO_WARMUP_STEPS`
+MAX_LAG = 48
+# maximum absolute power of `lagged_terms` factors
+MAX_POWER = 3
+# maximum length of `af_window` filter kernels
+MAX_WINDOW_LENGTH = 2000
+_FACTOR_KEYS = ("input", "lag", "scale", "offset", "power", "transport")
+_TRANSPORT_KEYS = ("speed", "distance", "speed_scale", "min_lag", "max_lag")
+_WINDOW_KEYS = ("name", "length", "normalize")
+_SINE_NUMBER_KEYS = ("ms_amplitude", "ms_exp_scale", "ms_exp_offset", "ms_angular_frequency", "ms_phase")
 
 
 def deep_merge(base: Mapping[str, Any], override: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -95,6 +105,29 @@ def resolve_callbacks(spec: Mapping[str, Mapping[str, Any]]) -> Dict[str, Dict[s
             if isinstance(series_spec.get(key), str):
                 series_spec[key] = resolve_callback(series_spec[key])
     return resolved
+
+
+def code_strings(config: Mapping[str, Any]) -> List[str]:
+    """List the code strings of a configuration, which `resolve_callbacks` would evaluate.
+
+    Args:
+        config: Configuration (or partial configuration) with optional `process_spec` and `action_spec`.
+
+    Returns:
+        Paths (e.g. `process_spec.OD.fc_callback`) of all `fc_callback` and `af_kernel` values given as strings.
+    """
+    paths: List[str] = []
+    for spec_name in ("process_spec", "action_spec"):
+        spec = config.get(spec_name)
+        if not isinstance(spec, Mapping):
+            continue
+        for channel, channel_spec in spec.items():
+            if not isinstance(channel_spec, Mapping):
+                continue
+            paths.extend(
+                f"{spec_name}.{channel}.{key}" for key in _CALLBACK_KEYS if isinstance(channel_spec.get(key), str)
+            )
+    return paths
 
 
 def build_ccbench_config(
@@ -229,9 +262,14 @@ def validate_ccbench_config(config: Mapping[str, Any]) -> None:
         errors.append("action_spec must be a mapping of channel specifications")
         action_spec = {}
 
+    # channels in the order of their computation by the environment (action channels not in process_spec last)
+    order = list(process_spec) + [k for k in action_spec if k not in process_spec]
     for spec_name, spec in (("process_spec", process_spec), ("action_spec", action_spec)):
         for channel, channel_spec in spec.items():
             errors.extend(_validate_channel(f"{spec_name}.{channel}", channel_spec, spec_name == "action_spec"))
+            if isinstance(channel_spec, Mapping):
+                earlier = order[: order.index(channel)] if spec_name == "process_spec" else []
+                errors.extend(_generator_param_errors(f"{spec_name}.{channel}", channel_spec, order, earlier))
 
     channels = {k: v for k, v in {**action_spec, **process_spec}.items() if isinstance(v, Mapping)}
     action_channels = {k for k, v in channels.items() if v.get("semantics") == "action"}
@@ -318,6 +356,146 @@ def _validate_channel(name: str, spec: Any, is_action_spec: bool) -> List[str]:
             errors.append(f"{name}.limits must be two numbers [low, high] with low < high, got {limits!r}")
     if "unit" in spec and not isinstance(spec["unit"], str):
         errors.append(f"{name}.unit must be a string, got {spec['unit']!r}")
+    return errors
+
+
+def _types(spec: Mapping[str, Any]) -> List[str]:
+    types = spec.get("type")
+    if isinstance(types, str):
+        return [types]
+    return list(types) if isinstance(types, (list, tuple)) else []
+
+
+def _is_finite_number(value: Any) -> bool:
+    return _is_number(value) and bool(np.isfinite(value))
+
+
+def _generator_param_errors(name: str, spec: Mapping[str, Any], channels: List[str], earlier: List[str]) -> List[str]:
+    """Check the parameters of the data-only generators `lagged_terms`, `modulated_sine` and `apply_filter`.
+
+    Args:
+        name: Name of the channel specification for error messages.
+        spec: Channel specification.
+        channels: Names of all channels.
+        earlier: Names of the channels computed before this one in each timestep (allowed for lag 0).
+
+    Returns:
+        List of detected problems.
+    """
+    types = _types(spec)
+    errors = []
+    if "lagged_terms" in types and "lt_terms" not in spec:
+        errors.append(f"{name}.lt_terms is required for generator lagged_terms")
+    if "lt_terms" in spec:
+        errors.extend(_terms_errors(f"{name}.lt_terms", spec["lt_terms"], channels, earlier))
+    if "modulated_sine" in types:
+        for key in _SINE_NUMBER_KEYS:
+            if key in spec and not _is_finite_number(spec[key]):
+                errors.append(f"{name}.{key} must be a finite number, got {spec[key]!r}")
+        if spec.get("ms_input") is not None and spec["ms_input"] not in channels:
+            errors.append(f"{name}.ms_input must name a channel, got {spec['ms_input']!r}")
+    if "af_window" in spec:
+        if "af_kernel" in spec:
+            errors.append(f"{name}: af_window and af_kernel are mutually exclusive")
+        errors.extend(_window_errors(f"{name}.af_window", spec["af_window"]))
+    elif "apply_filter" in types and "af_kernel" not in spec:
+        errors.append(f"{name}: af_kernel or af_window is required for generator apply_filter")
+    return errors
+
+
+def _terms_errors(name: str, terms: Any, channels: List[str], earlier: List[str]) -> List[str]:
+    if not isinstance(terms, (list, tuple)) or len(terms) == 0:
+        return [f"{name} must be a non-empty list of terms {{coef, factors}}, got {terms!r}"]
+    errors = []
+    for i, term in enumerate(terms):
+        term_name = f"{name}[{i}]"
+        if not isinstance(term, Mapping):
+            errors.append(f"{term_name} must be a mapping {{coef, factors}}, got {term!r}")
+            continue
+        unknown = sorted(set(term) - {"coef", "factors"})
+        if unknown:
+            errors.append(f"{term_name} contains unknown keys {unknown}")
+        if "coef" in term and not _is_finite_number(term["coef"]):
+            errors.append(f"{term_name}.coef must be a finite number, got {term['coef']!r}")
+        factors = term.get("factors", [])
+        if not isinstance(factors, (list, tuple)):
+            errors.append(f"{term_name}.factors must be a list of factors, got {factors!r}")
+            continue
+        for j, factor in enumerate(factors):
+            errors.extend(_factor_errors(f"{term_name}.factors[{j}]", factor, channels, earlier))
+    return errors
+
+
+def _factor_errors(name: str, factor: Any, channels: List[str], earlier: List[str]) -> List[str]:
+    if not isinstance(factor, Mapping):
+        return [f"{name} must be a mapping {{input, lag, scale, offset, power}}, got {factor!r}"]
+    errors = []
+    unknown = sorted(set(factor) - set(_FACTOR_KEYS))
+    if unknown:
+        errors.append(f"{name} contains unknown keys {unknown}")
+    channel = factor.get("input")
+    if channel not in channels:
+        errors.append(f"{name}.input must name a channel, got {channel!r}")
+    if "transport" in factor:
+        if "lag" in factor:
+            errors.append(f"{name}: lag and transport are mutually exclusive")
+        errors.extend(_transport_errors(f"{name}.transport", factor["transport"], earlier))
+    else:
+        lag = factor.get("lag", 0)
+        if not _is_int(lag) or not 0 <= lag <= MAX_LAG:
+            errors.append(f"{name}.lag must be an integer in [0, {MAX_LAG}], got {lag!r}")
+        elif lag == 0 and channel in channels and channel not in earlier:
+            errors.append(f"{name}: lag 0 requires a channel computed before this one ({earlier}), got {channel!r}")
+    for key in ("scale", "offset"):
+        if key in factor and not _is_finite_number(factor[key]):
+            errors.append(f"{name}.{key} must be a finite number, got {factor[key]!r}")
+    power = factor.get("power", 1)
+    if not _is_finite_number(power) or power == 0 or abs(power) > MAX_POWER:
+        errors.append(f"{name}.power must be a non-zero number in [-{MAX_POWER}, {MAX_POWER}], got {power!r}")
+    return errors
+
+
+def _transport_errors(name: str, transport: Any, earlier: List[str]) -> List[str]:
+    if not isinstance(transport, Mapping):
+        return [f"{name} must be a mapping {{speed, distance, speed_scale, min_lag, max_lag}}, got {transport!r}"]
+    errors = []
+    unknown = sorted(set(transport) - set(_TRANSPORT_KEYS))
+    if unknown:
+        errors.append(f"{name} contains unknown keys {unknown}")
+    if transport.get("speed") not in earlier:
+        errors.append(
+            f"{name}.speed must name a channel computed before this one ({earlier}), got {transport.get('speed')!r}"
+        )
+    for key, default in (("distance", None), ("speed_scale", 1.0)):
+        value: Any = transport.get(key, default)
+        if not _is_finite_number(value) or value <= 0:
+            errors.append(f"{name}.{key} must be a positive number, got {value!r}")
+    min_lag: Any = transport.get("min_lag", 1)
+    max_lag: Any = transport.get("max_lag")
+    if not _is_int(min_lag) or not _is_int(max_lag) or not 1 <= min_lag <= max_lag <= MAX_LAG:
+        errors.append(
+            f"{name}: min_lag and max_lag must be integers with 1 <= min_lag <= max_lag <= {MAX_LAG}, "
+            f"got {min_lag!r} and {max_lag!r}"
+        )
+    return errors
+
+
+def _window_errors(name: str, window: Any) -> List[str]:
+    from ibs.envs.ccbench.functions import WINDOW_NAMES
+
+    if not isinstance(window, Mapping):
+        return [f"{name} must be a mapping {{name, length, normalize}}, got {window!r}"]
+    errors = []
+    unknown = sorted(set(window) - set(_WINDOW_KEYS))
+    if unknown:
+        errors.append(f"{name} contains unknown keys {unknown}")
+    if window.get("name") not in WINDOW_NAMES:
+        errors.append(f"{name}.name must be one of {WINDOW_NAMES}, got {window.get('name')!r}")
+    length: Any = window.get("length")
+    if not _is_int(length) or not 1 <= length <= MAX_WINDOW_LENGTH:
+        errors.append(f"{name}.length must be an integer in [1, {MAX_WINDOW_LENGTH}], got {length!r}")
+    if "normalize" in window and not isinstance(window["normalize"], bool):
+        errors.append(f"{name}.normalize must be a boolean, got {window['normalize']!r}")
     return errors
 
 

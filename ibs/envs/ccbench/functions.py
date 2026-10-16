@@ -12,6 +12,7 @@ from typing import Sequence
 from typing import TypeVar
 
 import numpy as np
+from scipy import signal
 
 NumberOrVector = TypeVar("NumberOrVector", float, np.ndarray)
 
@@ -63,3 +64,25 @@ def norm_filter(filt: Sequence[float]) -> np.ndarray:
         The `filt` coefficients scaled such that they sum up to 1.0 .
     """
     return np.array(filt) / sum(filt)
+
+
+# window functions of `scipy.signal.windows` without further parameters, usable as data-only filter kernels
+WINDOW_NAMES = ("boxcar", "triang", "bartlett", "hann", "hamming", "blackman")
+
+
+def window_filter(name: str, length: int, normalize: bool = True) -> np.ndarray:
+    """
+    Create a FIR filter kernel from a (symmetric) window function of `scipy.signal.windows`.
+
+    Args:
+        name: Name of the window function, one of `WINDOW_NAMES`.
+        length: Number of filter coefficients.
+        normalize: Scale the coefficients to sum up to 1.0 (see `norm_filter`).
+
+    Returns:
+        The filter coefficients, e.g. `norm_filter(scipy.signal.windows.hann(length))` for "hann".
+    """
+    if name not in WINDOW_NAMES:
+        raise ValueError(f"unknown window {name!r}, use one of {WINDOW_NAMES}")
+    window = getattr(signal.windows, name)(length)
+    return norm_filter(window) if normalize else window

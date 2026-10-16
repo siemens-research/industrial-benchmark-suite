@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from ibs.envs.ccbench.config_utils import channel_metadata
+from ibs.envs.ccbench.config_utils import code_strings
 from ibs.envs.ccbench.config_utils import deep_merge
 from ibs.envs.ccbench.config_utils import parse_freq
 from ibs.envs.ccbench.config_utils import resolve_callbacks
@@ -60,14 +61,85 @@ def test_resolve_callbacks_has_no_builtins():
         resolve_callbacks({"x": {"fc_callback": "open"}})
 
 
-def _default_config() -> dict:
-    config_path = Path(__file__).resolve().parents[1] / "resources/envs/ccbench/config/ccbench_default.yaml"
+def _default_config(name: str = "ccbench_default.yaml") -> dict:
+    config_path = Path(__file__).resolve().parents[1] / "resources/envs/ccbench/config" / name
     with open(config_path, "rt", encoding="utf8") as handle:
         return yaml.safe_load(handle)
 
 
+def _v1_config() -> dict:
+    return _default_config("ccbench_v1.yaml")
+
+
 def test_default_config_is_valid():
     validate_ccbench_config(_default_config())
+    validate_ccbench_config(_v1_config())
+
+
+def _od_terms(*factors) -> dict:
+    return {"process_spec": {"OD": {"lt_terms": [{"coef": 1.0, "factors": list(factors)}]}}}
+
+
+def _transport(**transport) -> dict:
+    return _od_terms({"input": "BP", "transport": {"speed": "DS", "distance": 0.25, "max_lag": 20, **transport}})
+
+
+@pytest.mark.parametrize(
+    "override, message",
+    [
+        ({"process_spec": {"OD": {"lt_terms": []}}}, "lt_terms must be a non-empty list"),
+        ({"process_spec": {"OD": {"lt_terms": None}}}, "lt_terms is required"),
+        ({"process_spec": {"OD": {"lt_terms": [{"coef": float("inf")}]}}}, r"lt_terms\[0\].coef"),
+        ({"process_spec": {"OD": {"lt_terms": [{"coef": 1.0, "factor": []}]}}}, "unknown keys"),
+        ({"process_spec": {"OD": {"lt_terms": [{"factors": {"input": "BP"}}]}}}, "factors must be a list"),
+        (_od_terms({"input": "XX", "lag": 1}), "input must name a channel"),
+        (_od_terms({"input": "BP", "lag": 49}), "lag must be an integer"),
+        (_od_terms({"input": "BP", "lag": 1.5}), "lag must be an integer"),
+        (_od_terms({"input": "WT"}), "lag 0 requires a channel computed before"),
+        (_od_terms({"input": "OD"}), "lag 0 requires a channel computed before"),
+        (_od_terms({"input": "BP_action"}), "lag 0 requires a channel computed before"),
+        (_od_terms({"input": "BP", "power": 0}), "power must be"),
+        (_od_terms({"input": "BP", "power": 4}), "power must be"),
+        (_od_terms({"input": "BP", "scale": "x"}), "scale must be a finite number"),
+        (_od_terms({"input": "BP", "delay": 3}), "unknown keys"),
+        (_transport(), None),
+        (_od_terms({"input": "BP", "lag": 1, "transport": {"speed": "DS", "distance": 1.0, "max_lag": 2}}), "mutually"),
+        (_transport(speed="WT"), "speed must name a channel computed before"),
+        (_transport(distance=0.0), "distance must be a positive number"),
+        (_transport(speed_scale=-1.0), "speed_scale must be a positive number"),
+        (_transport(max_lag=49), "min_lag and max_lag"),
+        (_transport(min_lag=0), "min_lag and max_lag"),
+        (_transport(length=3), "unknown keys"),
+        ({"process_spec": {"wave": {"ms_amplitude": "x"}}}, "ms_amplitude must be a finite number"),
+        ({"process_spec": {"wave": {"ms_phase": float("nan")}}}, "ms_phase must be a finite number"),
+        ({"process_spec": {"wave": {"ms_input": "XX"}}}, "ms_input must name a channel"),
+        ({"process_spec": {"AT": {"af_window": {"name": "kaiser", "length": 10}}}}, "af_window.name"),
+        ({"process_spec": {"AT": {"af_window": {"name": "hann", "length": 0}}}}, "af_window.length"),
+        ({"process_spec": {"AT": {"af_window": {"normalize": "yes"}}}}, "af_window.normalize"),
+        ({"process_spec": {"AT": {"af_window": {"size": 3}}}}, "unknown keys"),
+        ({"process_spec": {"AT": {"af_kernel": [0.5, 0.5]}}}, "mutually exclusive"),
+        ({"process_spec": {"AT": {"af_window": None}}}, "af_kernel or af_window is required"),
+    ],
+)
+def test_invalid_v1_config_raises(override, message):
+    config = deep_merge(_v1_config(), override)
+    if message is None:
+        validate_ccbench_config(config)
+        return
+    with pytest.raises(ValueError, match=message):
+        validate_ccbench_config(config)
+
+
+def test_code_strings_lists_paths_of_string_callbacks():
+    assert code_strings(_v1_config()) == []
+    assert code_strings(_default_config()) == [
+        "process_spec.AT.af_kernel",
+        "process_spec.wave.fc_callback",
+        "process_spec.OD.fc_callback",
+        "process_spec.WT.fc_callback",
+        "action_spec.HE_action.af_kernel",
+    ]
+    assert code_strings({"process_spec": {"OD": {"af_kernel": [0.5, 0.5], "fc_callback": abs}}}) == []
 
 
 @pytest.mark.parametrize(
