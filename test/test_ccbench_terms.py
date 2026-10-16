@@ -97,9 +97,8 @@ def test_lagged_terms_matches_legacy_formula_exactly():
         coef=15.0,
     )
     h = {k: history[k] for k in history}
-    assert od.step(now, history) == h["wave"].iloc[-1] + 1.5 * h["BP"].iloc[-4] / h["DS"].iloc[-2] + 0.1 * h[
-        "AT"
-    ].iloc[-1]
+    expected_od = h["wave"].iloc[-1] + 1.5 * h["BP"].iloc[-4] / h["DS"].iloc[-2] + 0.1 * h["AT"].iloc[-1]
+    assert od.step(now, history) == expected_od
     assert wt.step(now, history) == 15.0 / h["BP"].iloc[-6] / h["DS"].iloc[-3] / (1.0 - 0.02 * h["AT"].iloc[-1])
 
 
