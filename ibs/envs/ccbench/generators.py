@@ -28,12 +28,20 @@ from scipy import signal
 
 from ibs.common.sequences import is_sequence
 
+from .functions import window_filter
+
 
 logger = logging.getLogger(__name__)
 
 
 class ChannelGenerator:
-    def __init__(self, channel_name: str, spec: Optional[Mapping[str, Any]] = None, replay: Optional[pd.Series] = None):
+    def __init__(
+        self,
+        channel_name: str,
+        spec: Optional[Mapping[str, Any]] = None,
+        replay: Optional[pd.Series] = None,
+        rng: Optional[np.random.Generator] = None,
+    ):
         """
         Provide basis class for channel generator class hierarchy.
 
@@ -41,10 +49,15 @@ class ChannelGenerator:
             channel_name: name of the channel this generator is used for
             spec: contains configuration parameters for channel generator instance, usually taken from yaml
                 configuration file
+            replay: optional series with values to be returned instead of generated ones (for matching timesteps)
+            rng: random number generator used for all random draws of this generator; if None, a new, unseeded
+                generator is created. Pass a seeded generator (e.g. the environment's `np_random`) for reproducible
+                data.
         """
         self.channel_name = channel_name
         self.spec: Dict[str, Any] = dict(spec) if spec is not None else {}
         self.replay = replay
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         """
@@ -67,7 +80,7 @@ class ChannelGenerator:
         """
         if self.replay is not None and timestep in self.replay.index:
             return self.replay[timestep]
-        return cur_val or 0.0
+        return cur_val if cur_val is not None else 0.0
 
     def info_str(self, verbosity=1):
         """Return a short string representing the type of generator (class) and most import configuration parameters."""
@@ -93,9 +106,9 @@ class control_from_actions(ChannelGenerator):
 
     def __init__(self, init: Optional[float] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.last_val = init or self.spec.get("cfa_init", 1.0)
+        self.last_val = init if init is not None else self.spec.get("cfa_init", 1.0)
         if isinstance(self.last_val, (tuple, list)):
-            self.last_val = np.random.uniform(self.last_val[0], self.last_val[1])
+            self.last_val = self.rng.uniform(self.last_val[0], self.last_val[1])
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -155,6 +168,7 @@ class spike_action_gen(ChannelGenerator):
         scale: generated values follow the distribution provided in the `dist` argement, but are multiplied by `scale`
             during generation.
         offset: the scaled random distribution is shifted by this specified offset
+        limits: optional two-element sequence; generated action values are clipped to this interval
     """
 
     def __init__(
@@ -164,15 +178,17 @@ class spike_action_gen(ChannelGenerator):
         dist: Optional[str] = None,
         scale: Optional[float] = None,
         offset: Optional[float] = None,
+        limits: Optional[Sequence[float]] = None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.stepslen = stepslen or self.spec.get("sag_stepslen", 1)
-        self.action_prob = action_prob or self.spec.get("sag_action_prob", 1.0)
-        self.dist = dist or self.spec.get("sag_dist", "normal")
-        self.scale = scale or self.spec.get("sag_scale", 1.0)
-        self.offset = offset or self.spec.get("sag_offset", 0.0)
+        self.stepslen = stepslen if stepslen is not None else self.spec.get("sag_stepslen", 1)
+        self.action_prob = action_prob if action_prob is not None else self.spec.get("sag_action_prob", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("sag_dist", "normal")
+        self.scale = scale if scale is not None else self.spec.get("sag_scale", 1.0)
+        self.offset = offset if offset is not None else self.spec.get("sag_offset", 0.0)
+        self.limits = limits if limits is not None else self.spec.get("sag_limits")
         self.steps_until_action = self.stepslen
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
@@ -183,18 +199,20 @@ class spike_action_gen(ChannelGenerator):
             return self.replay[timestep]
         if self.steps_until_action < self.stepslen:
             return self.offset
-        if np.random.uniform() >= self.action_prob:
+        if self.rng.uniform() >= self.action_prob:
             return self.offset
         new_val = None
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         new_val += self.offset
         if cur_val is not None and not np.isnan(cur_val):
             new_val += cur_val
+        if self.limits is not None:
+            new_val = float(np.clip(new_val, self.limits[0], self.limits[1]))
         return new_val
 
     def info_str(self, verbosity=1):
@@ -243,11 +261,15 @@ class controls_exponential_action_scaler(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.assoc_ctrl_channel = assoc_ctrl_channel or self.spec["ceas_assoc_ctrl_channel"]
-        self.decay = decay or self.spec.get("ceas_decay", 0.0)
-        self.offset = offset or self.spec.get("ceas_offset", 0.0)
-        self.factor = factor or self.spec.get("ceas_factor", 1.0)
-        self.ctrl_limits = ctrl_limits or self.spec.get("ceas_ctrl_limits", [-np.inf, np.inf])
+        self.assoc_ctrl_channel = (
+            assoc_ctrl_channel if assoc_ctrl_channel is not None else self.spec["ceas_assoc_ctrl_channel"]
+        )
+        self.decay = decay if decay is not None else self.spec.get("ceas_decay", 0.0)
+        self.offset = offset if offset is not None else self.spec.get("ceas_offset", 0.0)
+        self.factor = factor if factor is not None else self.spec.get("ceas_factor", 1.0)
+        self.ctrl_limits = (
+            ctrl_limits if ctrl_limits is not None else self.spec.get("ceas_ctrl_limits", [-np.inf, np.inf])
+        )
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -298,10 +320,14 @@ class controls_limiter(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.assoc_ctrl_channel = assoc_ctrl_channel or self.spec["cl_assoc_ctrl_channel"]
-        self.decay = decay or self.spec.get("cl_decay", 0.0)
-        self.offset = offset or self.spec.get("cl_offset", 0.0)
-        self.ctrl_limits = ctrl_limits or self.spec.get("cl_ctrl_limits", [-np.inf, np.inf])
+        self.assoc_ctrl_channel = (
+            assoc_ctrl_channel if assoc_ctrl_channel is not None else self.spec["cl_assoc_ctrl_channel"]
+        )
+        self.decay = decay if decay is not None else self.spec.get("cl_decay", 0.0)
+        self.offset = offset if offset is not None else self.spec.get("cl_offset", 0.0)
+        self.ctrl_limits = (
+            ctrl_limits if ctrl_limits is not None else self.spec.get("cl_ctrl_limits", [-np.inf, np.inf])
+        )
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
@@ -352,9 +378,9 @@ class random_walk(ChannelGenerator):
         **kwargs,
     ):
         super().__init__(*args, spec=spec, **kwargs)
-        self.scale = scale or self.spec.get("rw_scale", 1.0)
-        self.dist = dist or self.spec.get("rw_dist", "normal")
-        self.decay = decay or self.spec.get("rw_decay", 0.0)
+        self.scale = scale if scale is not None else self.spec.get("rw_scale", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("rw_dist", "normal")
+        self.decay = decay if decay is not None else self.spec.get("rw_decay", 0.0)
         self.last_val = 0.0
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
@@ -362,9 +388,9 @@ class random_walk(ChannelGenerator):
             self.last_val = self.replay[timestep]
             return self.last_val
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         new_val += self.last_val
@@ -419,10 +445,12 @@ class random_walk_overlay(ChannelGenerator):
     ):
         super().__init__(*args, **kwargs)
         steplen_raw = steplen if steplen is not None else self.spec.get("rwo_steplen", [None])
-        scales = scales or self.spec.get("rwo_scales", [1])
-        dists = dists or self.spec.get("rwo_dists", ["normal"])
-        decays = decays or self.spec.get("rwo_decays", [0.0])
-        self.offset = offset or self.spec.get("offset", 0.0)
+        scales = scales if scales is not None else self.spec.get("rwo_scales", [1])
+        dists = dists if dists is not None else self.spec.get("rwo_dists", ["normal"])
+        decays = decays if decays is not None else self.spec.get("rwo_decays", [0.0])
+        if offset is None:
+            offset = self.spec.get("rwo_offset", self.spec.get("offset", 0.0))
+        self.offset = offset
         steplen_seq = cast(Sequence[Optional[int]], steplen_raw)
         self.steplen = [sl if sl is not None else 1 for sl in steplen_seq]
         self.scales = (
@@ -435,7 +463,7 @@ class random_walk_overlay(ChannelGenerator):
         self.step_counts = [sl for sl in self.steplen]
         self.last_vals: List[float] = [0.0] * len(self.steplen)
         self.random_walks = [
-            random_walk(scale, dist, decay, channel_name=self.channel_name)
+            random_walk(scale=scale, dist=dist, decay=decay, channel_name=self.channel_name, rng=self.rng)
             for scale, dist, decay in zip(self.scales, self.dists, self.decays)
         ]
 
@@ -477,16 +505,16 @@ class white_noise(ChannelGenerator):
 
     def __init__(self, scale: Optional[float] = None, dist: Optional[str] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.scale = scale or self.spec.get("wn_scale", 1.0)
-        self.dist = dist or self.spec.get("wn_dist", "normal")
+        self.scale = scale if scale is not None else self.spec.get("wn_scale", 1.0)
+        self.dist = dist if dist is not None else self.spec.get("wn_dist", "normal")
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: float = np.nan) -> float:
         if self.replay is not None and timestep in self.replay.index:
             return self.replay[timestep]
         if self.dist == "uniform":
-            new_val = np.random.uniform(low=-self.scale, high=self.scale)
+            new_val = self.rng.uniform(low=-self.scale, high=self.scale)
         elif self.dist == "normal":
-            new_val = np.random.normal(loc=0.0, scale=self.scale)
+            new_val = self.rng.normal(loc=0.0, scale=self.scale)
         else:
             raise ValueError(f"Unknown dist '{self.dist}'")
         if cur_val is not None:
@@ -516,8 +544,8 @@ class function_callback(ChannelGenerator):
 
     def __init__(self, inputs: Optional[Sequence[str]] = None, callback: Optional[Callable] = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.inputs = inputs or self.spec.get("fc_inputs", [])
-        self.callback = callback or self.spec["fc_callback"]
+        self.inputs = inputs if inputs is not None else self.spec.get("fc_inputs", [])
+        self.callback = callback if callback is not None else self.spec["fc_callback"]
         self.input_values = pd.Series(
             [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
         )
@@ -534,7 +562,7 @@ class function_callback(ChannelGenerator):
                 )
             )
         except (RuntimeError, IndexError) as e:
-            logger.warning(f"callback function evaluation resulted in exception: {e}")
+            logger.debug("callback function evaluation resulted in exception: %s", e)
             new_val = np.nan
         return new_val
 
@@ -542,6 +570,200 @@ class function_callback(ChannelGenerator):
         res = super().info_str(verbosity)
         if verbosity >= 1:
             res += f"_inputs={','.join(self.inputs)}"
+        return res
+
+
+class lagged_terms(ChannelGenerator):
+    """
+    Compute a sum of products of (lagged) channel values, i.e. a polynomial of the inputs without code strings.
+
+    The value is `sum(term["coef"] * prod(factor values))` over all terms. A factor is a mapping with the keys
+    `input` (name of a channel in `history`), `lag` (number of timesteps, default 0, i.e. the current value of a channel
+    computed before this one), `scale` (default 1.0), `offset` (default 0.0) and `power` (non-zero integer or float,
+    default 1), with the value `(offset + scale * x[t - lag]) ** power`. A negative power divides by the factor.
+    Instead of `lag`, a factor can contain `transport`, a mapping with the keys `speed` (name of a channel computed
+    before this one), `distance`, `speed_scale` (default 1.0), `min_lag` (default 1) and `max_lag`: the lag is then the
+    smallest number of timesteps k for which the transported distance `sum(speed_scale * speed[t - j] * dt for j < k)`
+    reaches `distance` (`dt` being the timestep duration in seconds), clipped to `[min_lag, max_lag]`. This models a
+    variable transport delay between an actuator and a sensor (plug flow).
+    If the history of an input is too short for a lag, the result is NaN. If this is not the first generator in the
+    chain, the result is added to `cur_val`.
+    In the `process_spec` structure of the config file, each of the parameters below must be prefixed with a "lt_",
+    to allow same argument names for different generators.
+
+    Args:
+        terms: Sequence of terms, each a mapping with `coef` (default 1.0) and `factors` (sequence of factors as
+            described above), e.g. `[{coef: 1.5, factors: [{input: BP, lag: 3}, {input: DS, lag: 1, power: -1}]}]`
+            for `1.5 * BP[t-3] / DS[t-1]`.
+    """
+
+    def __init__(self, terms: Optional[Sequence[Mapping[str, Any]]] = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.terms = terms if terms is not None else self.spec["lt_terms"]
+
+    def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: Optional[float] = None) -> float:
+        if self.replay is not None and timestep in self.replay.index:
+            return self.replay[timestep]
+        new_val = 0.0
+        for term in self.terms:
+            value = float(term.get("coef", 1.0))
+            for factor in term.get("factors", []):
+                x = self._factor_value(factor, timestep, history)
+                if x is None:
+                    return np.nan
+                power = factor.get("power", 1)
+                if power > 0:
+                    value *= x if power == 1 else x**power
+                else:
+                    value /= x if power == -1 else x ** (-power)
+            new_val += value
+        if cur_val is not None:
+            new_val = cur_val + new_val
+        return new_val
+
+    def _factor_value(
+        self, factor: Mapping[str, Any], timestep: dt.datetime, history: Mapping[str, pd.Series]
+    ) -> Optional[float]:
+        """Return `offset + scale * x[t - lag]` of a factor, or None if the history is too short."""
+        lag = (
+            self._transport_lag(factor["transport"], timestep, history)
+            if "transport" in factor
+            else factor.get("lag", 0)
+        )
+        if lag is None:
+            return None
+        x = _lagged_value(history[factor["input"]], timestep, lag)
+        if x is None:
+            return None
+        scale = factor.get("scale", 1.0)
+        offset = factor.get("offset", 0.0)
+        if scale != 1.0:
+            x = scale * x
+        if offset != 0.0:
+            x = offset + x
+        return x
+
+    @staticmethod
+    def _transport_lag(
+        transport: Mapping[str, Any], timestep: dt.datetime, history: Mapping[str, pd.Series]
+    ) -> Optional[int]:
+        """Return the transport delay in timesteps, or None if the history is too short."""
+        speed = history[transport["speed"]]
+        if len(speed) < 2:
+            return None
+        step_seconds = (speed.index[-1] - speed.index[-2]).total_seconds()
+        speed_scale = transport.get("speed_scale", 1.0)
+        min_lag = transport.get("min_lag", 1)
+        max_lag = transport["max_lag"]
+        target = transport["distance"] * (1.0 - 1e-9)
+        distance = 0.0
+        lag = max_lag
+        for k in range(1, max_lag + 1):
+            v = _lagged_value(speed, timestep, k - 1)
+            if v is None:
+                return None
+            distance += speed_scale * v * step_seconds
+            if distance >= target:
+                lag = k
+                break
+        return max(lag, min_lag)
+
+    def info_str(self, verbosity=1):
+        res = super().info_str(verbosity)
+        if verbosity >= 1:
+            factors = [
+                f"{f['input']}@{'v' if 'transport' in f else f.get('lag', 0)}"
+                for term in self.terms
+                for f in term.get("factors", [])
+            ]
+            res += f"_inputs={','.join(factors)}"
+        return res
+
+
+def _lagged_value(series: pd.Series, timestep: dt.datetime, lag: int) -> Optional[float]:
+    """
+    Return the value of a channel history `lag` timesteps before `timestep`, or None if the history is too short.
+
+    The history contains the value of the current timestep only if its channel has already been computed for it.
+
+    Raises:
+        ValueError: if `lag` is 0 and the value of the current timestep has not been computed yet.
+    """
+    n = len(series)
+    current = n > 0 and series.index[-1] == timestep
+    pos = n - 1 - lag if current else n - lag
+    if pos >= n:
+        raise ValueError(f"lag 0 of channel {series.name} requested before its value for {timestep} was computed")
+    return series.values[pos] if pos >= 0 else None
+
+
+class modulated_sine(ChannelGenerator):
+    """
+    Generate a sine wave whose amplitude is modulated exponentially by the current value of another channel.
+
+    The value is `amplitude * exp(exp_scale * x + exp_offset) * sin(angular_frequency * s + phase)`, with x the most
+    recent value of the channel `input` (a constant envelope `amplitude * exp(exp_offset)` without input) and s the
+    seconds since the first step of this generator (including warm-up steps). If this is not the first generator in
+    the chain, the result is added to `cur_val`.
+    In the `process_spec` structure of the config file, each of the parameters below must be prefixed with a "ms_",
+    to allow same argument names for different generators.
+
+    Args:
+        input: Name of the channel (from `history`) modulating the amplitude.
+        amplitude: Amplitude factor of the wave.
+        exp_scale: Factor of the input value in the exponent.
+        exp_offset: Offset of the exponent.
+        angular_frequency: Angular frequency of the wave in rad/s.
+        phase: Phase of the wave in rad.
+    """
+
+    def __init__(
+        self,
+        input: Optional[str] = None,  # pylint: disable=redefined-builtin
+        amplitude: Optional[float] = None,
+        exp_scale: Optional[float] = None,
+        exp_offset: Optional[float] = None,
+        angular_frequency: Optional[float] = None,
+        phase: Optional[float] = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.input = input if input is not None else self.spec.get("ms_input")
+        self.amplitude = amplitude if amplitude is not None else self.spec.get("ms_amplitude", 1.0)
+        self.exp_scale = exp_scale if exp_scale is not None else self.spec.get("ms_exp_scale", 0.0)
+        self.exp_offset = exp_offset if exp_offset is not None else self.spec.get("ms_exp_offset", 0.0)
+        self.angular_frequency = (
+            angular_frequency if angular_frequency is not None else self.spec.get("ms_angular_frequency", 1.0)
+        )
+        self.phase = phase if phase is not None else self.spec.get("ms_phase", 0.0)
+        self.first_timestep: Optional[dt.datetime] = None
+
+    def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: Optional[float] = None) -> float:
+        if self.first_timestep is None:
+            self.first_timestep = timestep
+        if self.replay is not None and timestep in self.replay.index:
+            return self.replay[timestep]
+        x = 0.0
+        if self.input is not None:
+            values = history[self.input]
+            if len(values) == 0:
+                return np.nan
+            x = values.values[-1]
+        seconds = (pd.Timestamp(timestep) - pd.Timestamp(self.first_timestep)).total_seconds()
+        new_val = (
+            self.amplitude
+            * np.exp(self.exp_scale * x + self.exp_offset)
+            * np.sin(self.angular_frequency * seconds + self.phase)
+        )
+        if cur_val is not None:
+            new_val = cur_val + new_val
+        return new_val
+
+    def info_str(self, verbosity=1):
+        res = super().info_str(verbosity)
+        if verbosity >= 1:
+            res += f"_input={self.input}"
         return res
 
 
@@ -557,11 +779,18 @@ class apply_filter(ChannelGenerator):
             multiplied with earlier time series elements.
             In the YAML config file, a python snippet calculating and returning a filter as sequence of floats can also
             be specified (e.g. `norm_filter(scipy.signal.windows.hann(150))`).
+        window: Alternative to `kernel` without code: mapping with `name` (see `functions.WINDOW_NAMES`), `length` and
+            optional `normalize` (default True), e.g. `{name: hann, length: 150}`, see `functions.window_filter`.
     """
 
-    def __init__(self, kernel: Optional[Sequence[float]] = None, *args, **kwargs):
+    def __init__(
+        self, kernel: Optional[Sequence[float]] = None, window: Optional[Mapping[str, Any]] = None, *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
-        self.kernel = kernel or self.spec["af_kernel"]
+        if kernel is None:
+            window = window if window is not None else self.spec.get("af_window")
+            kernel = cast(Sequence[float], window_filter(**window) if window is not None else self.spec["af_kernel"])
+        self.kernel: Sequence[float] = kernel
         self.input_values = pd.Series(
             [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
         )
@@ -622,7 +851,7 @@ def get_num_plots(spec: Mapping[str, Mapping[str, Any]], with_intermediates=Fals
     """
     num_plots = 0
     for _, sub_spec in spec.items():
-        if sub_spec["semantics"] in ("temp") and not with_temporaries:
+        if sub_spec["semantics"] in ("temp",) and not with_temporaries:
             continue
         num_plots += 1
         if with_intermediates and isinstance(sub_spec["type"], (list, tuple)):

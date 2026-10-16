@@ -28,6 +28,11 @@ register(
 
 register(
     id="CCBench-v0",
+    entry_point="ibs.envs.ccbench.ccbench_env:create_ccbench_env_v0",
+)
+
+register(
+    id="CCBench-v1",
     entry_point="ibs.envs.ccbench.ccbench_env:create_ccbench_env",
 )
 

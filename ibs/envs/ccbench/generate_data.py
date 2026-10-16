@@ -31,6 +31,17 @@ from ibs.envs.ccbench.exploration_agent import ExplorationAgent
 from ibs.common.logging import configure_logger
 from ibs.common.sequences import DictNamespace
 from ibs.envs.ccbench.config_utils import build_ccbench_config
+from ibs.envs.ccbench.config_utils import resolve_callbacks
+
+# configuration keys forwarded unchanged to the environment, if present in the data generation config
+ENV_CONFIG_KEYS = (
+    "start_timestamp",
+    "freq",
+    "desired_goal",
+    "warmup_steps",
+    "expose_temp_channels",
+    "truncate_on_time_limit",
+)
 
 
 def generate_data(
@@ -90,33 +101,13 @@ def generate_data(
     logger = configure_logger(__file__, c)
     logger.info("Generating new dataset")
 
-    from ibs.envs.ccbench.functions import norm_filter, soft_hinge
-    from scipy import signal
+    c.process_spec = resolve_callbacks(c.process_spec)
+    c.action_spec = resolve_callbacks(c.action_spec)
 
-    callbacks_namespace = {
-        "np": np,
-        "signal": signal,
-        "norm_filter": norm_filter,
-        "soft_hinge": soft_hinge,
-    }
-
-    def resolve_callback(callback_spec: str):
-        safe_globals = {"__builtins__": {}}
-        safe_globals.update(callbacks_namespace)
-        return eval(callback_spec, safe_globals, {})  # pylint: disable=eval-used
-
-    for _, series_spec in c.process_spec.items():
-        if "fc_callback" in series_spec and isinstance(series_spec["fc_callback"], str):
-            series_spec["fc_callback"] = resolve_callback(series_spec["fc_callback"])
-        if "af_kernel" in series_spec and isinstance(series_spec["af_kernel"], str):
-            series_spec["af_kernel"] = resolve_callback(series_spec["af_kernel"])
-    for _, series_spec in c.action_spec.items():
-        if "fc_callback" in series_spec and isinstance(series_spec["fc_callback"], str):
-            series_spec["fc_callback"] = resolve_callback(series_spec["fc_callback"])
-        if "af_kernel" in series_spec and isinstance(series_spec["af_kernel"], str):
-            series_spec["af_kernel"] = resolve_callback(series_spec["af_kernel"])
-
-    np.random.seed(c.seed)
+    # independent, reproducible per-episode seeds for environment and agent, all derived from c.seed
+    env_seed_seq, agent_seed_seq = np.random.SeedSequence(c.seed).spawn(2)
+    env_seeds = env_seed_seq.generate_state(max(c.episodes, 1))
+    agent_seeds = agent_seed_seq.generate_state(max(c.episodes, 1))
 
     c.plotargs = {}
     c.num_plots = get_num_plots(
@@ -230,16 +221,16 @@ def generate_data(
     # logger.info(f"Generating data according to\n{pp.pformat(process_spec)}")
 
     # get / initialize environment
-    env = CCBenchEnv(
-        config_dict={
-            "process_spec": c.process_spec,
-            "action_spec": c.action_spec,
-            "freq": dt.timedelta(seconds=1),
-            "episode_step": pd.DateOffset(days=1, normalize=True),
-            "keep_intermediate_series": True,
-            "render_file": os.path.splitext(c.export_filename)[0] + ".png",
-        }
-    )
+    env_config: Dict[str, Any] = {
+        "process_spec": c.process_spec,
+        "action_spec": c.action_spec,
+        "freq": dt.timedelta(seconds=1),
+        "episode_step": pd.DateOffset(days=1, normalize=True),
+        "keep_intermediate_series": True,
+        "render_file": os.path.splitext(c.export_filename)[0] + ".png",
+    }
+    env_config.update({k: c[k] for k in ENV_CONFIG_KEYS if k in c})
+    env = CCBenchEnv(config_dict=env_config)
 
     # get / initialize default agent
     default_agent = ExplorationAgent(c.action_spec)
@@ -248,21 +239,20 @@ def generate_data(
     for episode in range(c.episodes):
         logger.info(f"Generating episode {episode}")
         # reset agent/environment, get initial observation
-        default_agent.reset()
-        obs_raw, _ = env.reset(seed=c.seed + episode)
+        default_agent.reset(seed=int(agent_seeds[episode]))
+        # seeded resets start at the configured start timestamp, so explicitly continue after the last episode
+        options = None if episode == 0 else {"episode_start": env.cur_timestep + env.episode_step_size}
+        obs_raw, _ = env.reset(seed=int(env_seeds[episode]), options=options)
         obs: Dict[str, Any] = cast(Dict[str, Any], obs_raw)
         # run a loop over timesteps
         # for step in tqdm.tqdm(range(c.episode_length), desc="step", ncols=100, position=4, mininterval=1.0):
         for _ in tqdm.tqdm(range(c.episode_length), desc="step", ncols=100, mininterval=1.0):
             # get action from agent using observation
-            # desired_goal = { c: 0.0 for c in env.target_channels }
-            # desired_goal = obs["desired_goal"]
-            desired_goal = env.derive_desired_goal()
             actions = default_agent.act(
-                observation=obs["observation"], desired_goal=desired_goal, timestep=env.cur_timestep
+                observation=obs["observation"], desired_goal=obs["desired_goal"], timestep=env.cur_timestep
             )
             # perform an environment step using the action, to obtain next observation, reward, terminal state indicator
-            obs_raw, reward, terminated, truncated, _info = env.step(actions, desired_goal=desired_goal)
+            obs_raw, reward, terminated, truncated, _info = env.step(actions)
             obs = cast(Dict[str, Any], obs_raw)
             # feed back reward into agent
             default_agent.observe(reward)

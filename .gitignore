@@ -148,6 +148,7 @@ results
 # Installation-dependent config files (their corresponding .templ.yaml files should be tracked)
 /resources/envs/**/config/*.yaml
 !/resources/envs/**/config/ccbench_default.yaml
+!/resources/envs/**/config/ccbench_v1.yaml
 !/resources/envs/**/config/*.templ.yaml
 
 # /src/__init__.py
