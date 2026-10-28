@@ -1,6 +1,6 @@
 # Industrial Benchmark Suite (IBS)
 
-The Industrial Benchmark Suite (IBS) is a collection of simulated environments designed to facilitate research and development in the field of reinforcement learning (RL) for industrial control systems. The suite includes a variety of environments that mimic real-world industrial processes, allowing researchers to test, evaluate and improve RL algorithms in settings which pose special challenges w.r.t. system identification, task variability and noise conditions.
+The Industrial Benchmark Suite (IBS) is a collection of simulated environments designed to facilitate research and development in the field of reinforcement learning (RL) for industrial control systems. The suite includes a variety of environments that mimic real-world industrial processes, allowing researchers to test, evaluate and improve RL algorithms in settings which pose special challenges regarding system identification, task variability and noise conditions.
 
 
 ## Environments
@@ -34,26 +34,23 @@ pip install .
 
 ## Contributing
 
-To set up a development environment, first clone the repository and then install all dependencies (including dev/test extras) using either **Poetry** or **uv**:
-
-### Using Poetry
-
-```bash
-poetry install
-poetry run pytest
-```
-
-### Using uv
+To set up a development environment, first clone the repository and then install all dependencies (including the dev group) using **uv**:
 
 ```bash
 uv sync
 uv run pytest
 ```
 
+The optional documentation dependencies can be installed with:
+
+```bash
+uv sync --group docs
+```
+
 Before committing, make sure pre-commit hooks are active:
 
 ```bash
-pre-commit install
+uv run pre-commit install
 ```
 
 
@@ -69,10 +66,10 @@ gen_industry_benchmarks ccbench --config-file resources/envs/ccbench/config/ccbe
 
 ## License
 
-The code in this repository is licensed under the Siemens Inner Source License v1.4. See the [LICENSE](LICENSE) file for details.
+The code in this repository is licensed under the MIT License. See the [LICENSE](LICENSE.txt) file for details.
 
 
-## Contributors
+## Main contributors
 
 - Marc Weber (marc-weber@siemens.com)
 - Holger Schoener (holger.schoener@siemens.com)

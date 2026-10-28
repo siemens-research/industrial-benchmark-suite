@@ -2,59 +2,63 @@
 #
 # SPDX-License-Identifier: MIT
 
-[tool.poetry]
-name = "Industrial Benchmark Suite"
+[project]
+name = "industrial-benchmark-suite"
 version = "0.1.0"
 description = "Collection of industrial benchmark environments."
 authors = [
-    "Marc Weber <marc-weber@siemens.com>",
-    "Holger Schoener <holger.schoener@siemens.com>",
-    "Daniel Hein <hein.daniel@siemens.com>",
+    { name = "Marc Weber", email = "marc-weber@siemens.com" },
+    { name = "Holger Schoener", email = "holger.schoener@siemens.com" },
+    { name = "Daniel Hein", email = "hein.daniel@siemens.com" },
 ]
-license = "Siemens Inner Source License v1.4"
+license = "MIT"
 readme = "README.md"
+keywords = ["reinforcement-learning", "gym", "benchmark", "industrial-control", "timeseries"]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "gymnasium[classic-control]>=0.26.1",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "pyyaml>=5.3",
+    "scipy",
+    "tensorflow>2.20",  # avoid current runtime issue with pyarrow and tensorflow==2.20
+    "tqdm",
+    "typer",
+]
+
+[project.urls]
 homepage = "https://code.siemens.com/ai/industrial-benchmark-suite"
 repository = "https://code.siemens.com/ai/industrial-benchmark-suite"
-keywords = ["reinforcement-learning", "gym", "benchmark", "industrial-control", "timeseries"]
 
-packages = [
-    { include = "ibs" }
-]
-
-[tool.poetry.scripts]
+[project.scripts]
 gen_industry_benchmarks = "ibs.__main__:app"
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.14"
-gymnasium = {version=">=0.26.1", extras=["classic-control"]}
-matplotlib = "*"
-numpy = "*"
-pandas = "*"
-pyarrow = "*"
-pyyaml = ">=5.3"
-scipy = "*"
-tensorflow = ">2.20"  # avoid current runtime issue with pyarrow and tensorflow==2.20
-tqdm = "*"
-typer = "*"
+[dependency-groups]
+dev = [
+    "mypy",
+    "pre-commit",
+    "pre-commit-hooks",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+docs = [
+    "mkdocs",
+    "mkdocs-jupyter",
+    "mkdocs-material",
+    "mkdocstrings",
+    "mkdocstrings-python-legacy",
+    "pymdown-extensions",
+]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "*"
-pre-commit = "*"
-pre-commit-hooks = "*"
-pytest = "*"
-pytest-cov = "*"
-ruff = "*"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.docs.dependencies]
-mkdocs = "*"
-mkdocs-jupyter = "*"
-mkdocs-material = "*"
-mkdocstrings = "*"
-mkdocstrings-python-legacy = "*"
-pymdown-extensions = "*"
+[tool.hatch.build.targets.wheel]
+packages = ["ibs"]
 
 [tool.black]
 line-length = 120
@@ -101,7 +105,3 @@ show_missing = true
 
 [tool.isort]
 profile = "black"
-
-[build-system]
-requires = ["poetry_core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"

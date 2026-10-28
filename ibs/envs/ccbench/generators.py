@@ -549,7 +549,7 @@ class function_callback(ChannelGenerator):
         self.inputs = inputs if inputs is not None else self.spec.get("fc_inputs", [])
         self.callback = callback if callback is not None else self.spec["fc_callback"]
         self.input_values = pd.Series(
-            [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
+            [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float64, name=f"{self.channel_name}_fc_input"
         )
 
     def step(self, timestep: dt.datetime, history: Mapping[str, pd.Series], cur_val: Optional[float] = None) -> float:
@@ -794,7 +794,7 @@ class apply_filter(ChannelGenerator):
             kernel = cast(Sequence[float], window_filter(**window) if window is not None else self.spec["af_kernel"])
         self.kernel: Sequence[float] = kernel
         self.input_values = pd.Series(
-            [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
+            [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float64, name=f"{self.channel_name}_fc_input"
         )
         self.kernel_size = len(self.kernel)
         self.filter_delay = 0
@@ -820,7 +820,7 @@ class apply_filter(ChannelGenerator):
                 ) from e
         else:
             self.input_values = pd.Series(
-                [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float32, name=f"{self.channel_name}_fc_input"
+                [], index=pd.DatetimeIndex([], tz="utc"), dtype=np.float64, name=f"{self.channel_name}_fc_input"
             )
             new_val = cur_val
         if self.replay is not None and timestep in self.replay.index:

@@ -15,19 +15,12 @@ repos:
         types_or: [python, pyi]
         require_serial: true
 
-      - id: poetry-check
-        name: Poetry – Check `pyproject.toml`
-        entry: poetry check
+      - id: uv-lock-check
+        name: uv – Check `uv.lock` is up to date
+        entry: uv lock --check
         language: system
         pass_filenames: false
-        files: ^pyproject\.toml$
-
-      - id: poetry-check-lock
-        name: Poetry – Check `poetry.lock`
-        entry: poetry check --lock
-        language: system
-        pass_filenames: false
-        files: ^pyproject\.toml|poetry\.lock$
+        files: ^pyproject\.toml|uv\.lock$
 
       - id: trailing-whitespace
         name: Trim trailing whitespace
