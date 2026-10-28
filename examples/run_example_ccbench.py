@@ -1,7 +1,9 @@
 """
 Example of how to run the ccbench environment using a random sparse policy.
 
-(c) 2026 Siemens AG
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

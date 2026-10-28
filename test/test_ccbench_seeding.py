@@ -1,4 +1,9 @@
-"""Tests for seeding and reproducibility of the CCBench environment, exploration agent and data generation."""
+"""Tests for seeding and reproducibility of the CCBench environment, exploration agent and data generation.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 from pathlib import Path
 

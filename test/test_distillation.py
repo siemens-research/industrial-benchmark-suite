@@ -1,4 +1,9 @@
-"""Test functionality of distillation benchmark."""
+"""Test functionality of distillation benchmark.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import tensorflow as tf

@@ -1,4 +1,9 @@
-"""Utilities for loading and merging YAML configuration."""
+"""Utilities for loading and merging YAML configuration.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import logging
 from pathlib import Path

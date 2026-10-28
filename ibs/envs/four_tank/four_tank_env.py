@@ -5,9 +5,12 @@ the water levels in the tanks by applying appropriate valve opening levels.
 This benchmark environment provides a realistic simulation of the system dynamics based on pre-trained dynamic models
 derived from real-world measurements.
 
-Author: Marc Weber (marc-weber@siemens.com)
+(C) Copyright Siemens AG 2026
 
-Copyright (C) 2026 Siemens AG.
+SPDX-License-Identifier: MIT
+
+Author:
+    Marc Weber (marc-weber@siemens.com)
 """
 
 from collections import deque

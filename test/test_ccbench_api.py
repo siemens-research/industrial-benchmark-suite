@@ -1,4 +1,9 @@
-"""Tests for the Gymnasium API conformance and the goal configuration of the CCBench environment."""
+"""Tests for the Gymnasium API conformance and the goal configuration of the CCBench environment.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import warnings
 

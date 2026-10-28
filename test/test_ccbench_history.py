@@ -1,4 +1,9 @@
-"""Tests for the preallocated episode history of the CCBench environment."""
+"""Tests for the preallocated episode history of the CCBench environment.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import pandas as pd

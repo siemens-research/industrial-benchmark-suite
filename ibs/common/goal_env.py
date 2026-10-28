@@ -4,8 +4,11 @@ This is a single class from the [Gymnasium Robotics](https://github.com/Farama-F
 replicated to avoid a complex and mostly irrelevant dependency. Slight adaptations make the return values compatible to the original
 Gymnasium API.
 
-The original file is provided under the MIT License, see below.
+(C) Copyright Siemens AG 2026
 
+SPDX-License-Identifier: MIT
+
+The original file is provided under the MIT License, see below.
 
 Copyright (c) 2022 Farama Foundation
 with modifications by the Siemens Team for the Industry Benchmarks Suite (c) 2026 Siemens AG

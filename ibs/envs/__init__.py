@@ -1,4 +1,9 @@
-"""Register pre-configured environments as benchmarks."""
+"""Register pre-configured environments as benchmarks.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 from gymnasium.envs.registration import register
 

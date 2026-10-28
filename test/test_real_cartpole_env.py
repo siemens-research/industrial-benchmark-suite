@@ -1,4 +1,9 @@
-"""Test functionality of real-cartpole benchmark."""
+"""Test functionality of real-cartpole benchmark.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import tensorflow as tf

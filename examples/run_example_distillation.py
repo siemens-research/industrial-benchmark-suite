@@ -1,4 +1,9 @@
-"""Example of how to run the distillation process benchmark using a pre-trained MOOSE policy."""
+"""Example of how to run the distillation process benchmark using a pre-trained MOOSE policy.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import pandas as pd
@@ -41,6 +46,7 @@ if __name__ == "__main__":
             observations.append(obs)
             actions.append(action)
             rewards.append(reward)
+            rewards_from_models.append(info["reward_from_models"])
             infos.append(info)
             model_input_buffer = info["model_input_buffer"]
             if RENDER_SCENE:
