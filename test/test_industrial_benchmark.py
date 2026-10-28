@@ -1,4 +1,9 @@
-"""Test functionality of the industrial benchmark (core IDS + Gymnasium wrapper)."""
+"""Test functionality of the industrial benchmark (core IDS + Gymnasium wrapper).
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 

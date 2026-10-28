@@ -1,7 +1,12 @@
 """
 Collection of utility functions to process lists and dictionaries.
 
-@author: Holger Schoener <holger.schoener@siemens.com>
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+
+Author:
+    Holger Schoener <holger.schoener@siemens.com>
 """
 
 import copy

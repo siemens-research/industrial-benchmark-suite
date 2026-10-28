@@ -1,4 +1,9 @@
-"""Tests for the CCBench configuration helpers."""
+"""Tests for the CCBench configuration helpers.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import datetime as dt
 from pathlib import Path

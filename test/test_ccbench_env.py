@@ -1,4 +1,9 @@
-"""Tests for the CCBench environment and CLI."""
+"""Tests for the CCBench environment and CLI.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import subprocess
 import sys

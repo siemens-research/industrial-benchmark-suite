@@ -3,10 +3,34 @@
 The dynamics of the real cartpole system, originally designed and built for the Cebit 2018,
 are simulated by running pre-trained Tensorflow surrogate models.
 
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+
 Author: Marc Weber (marc-weber@siemens.com)
 
-Copyright (C) 2024 Siemens AG. Parts of the source code are taken from the original Cartpole
+Parts of the source code are taken from the original Cartpole
 environment as provided by the Farama Foundation (under MIT license, see license text below).
+
+The MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 """
 
 from collections import deque

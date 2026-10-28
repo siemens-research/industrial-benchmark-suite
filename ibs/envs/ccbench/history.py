@@ -1,7 +1,9 @@
 """
 Preallocated channel history of a CCBench episode.
 
-(c) 2026 Siemens AG
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

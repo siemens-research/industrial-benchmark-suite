@@ -1,4 +1,9 @@
-"""Test functionality of four-tank benchmark."""
+"""Test functionality of four-tank benchmark.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import tensorflow as tf

@@ -1,4 +1,9 @@
-"""Example of how to run the Industrial Benchmark using the registered Gymnasium environment."""
+"""Example of how to run the Industrial Benchmark using the registered Gymnasium environment.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import pandas as pd

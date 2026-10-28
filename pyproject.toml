@@ -1,3 +1,7 @@
+# (C) Copyright Siemens AG 2026
+#
+# SPDX-License-Identifier: MIT
+
 [tool.poetry]
 name = "Industrial Benchmark Suite"
 version = "0.1.0"

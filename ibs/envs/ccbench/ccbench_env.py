@@ -1,7 +1,9 @@
 """
 Generation of artificial multivariate time-series data, suitable for use as OpenAI Gym environment.
 
-(c) 2026 Siemens AG
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

@@ -1,4 +1,9 @@
-"""Tests for the data-only CCBench generators, the CCBench-v1 config and the code string gate of the factories."""
+"""Tests for the data-only CCBench generators, the CCBench-v1 config and the code string gate of the factories.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import gymnasium as gym
 import numpy as np

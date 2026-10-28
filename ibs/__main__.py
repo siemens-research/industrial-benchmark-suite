@@ -1,4 +1,9 @@
-"""Command-line interface for Industry Benchmarks."""
+"""Command-line interface for Industry Benchmarks.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 from pathlib import Path
 from typing import Optional

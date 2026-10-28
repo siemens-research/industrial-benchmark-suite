@@ -1,7 +1,9 @@
 """
 Implementation of an RL agent performing configurable random actions to explore the available action space.
 
-(c) 2026 Siemens AG
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

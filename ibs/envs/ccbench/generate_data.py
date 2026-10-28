@@ -1,7 +1,9 @@
 """
-Data generation and visualization.
+Data generation and visualization functions used by the CCBench environment.
 
-(c) 2026 Siemens AG
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
 
 Author:
     Holger Schoener <holger.schoener@siemens.com>

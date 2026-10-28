@@ -1,4 +1,9 @@
-"""Tests for the CCBench channel generators."""
+"""Tests for the CCBench channel generators.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import numpy as np
 import pandas as pd

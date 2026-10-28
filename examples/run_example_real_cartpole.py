@@ -1,4 +1,9 @@
-"""Example of how to run the real-cartpole benchmark using a pre-trained MOOSE policy."""
+"""Example of how to run the real-cartpole benchmark using a pre-trained MOOSE policy.
+
+(C) Copyright Siemens AG 2026
+
+SPDX-License-Identifier: MIT
+"""
 
 import time
 
