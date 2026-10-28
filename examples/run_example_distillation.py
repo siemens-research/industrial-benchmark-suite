@@ -46,6 +46,7 @@ if __name__ == "__main__":
             observations.append(obs)
             actions.append(action)
             rewards.append(reward)
+            rewards_from_models.append(info["reward_from_models"])
             infos.append(info)
             model_input_buffer = info["model_input_buffer"]
             if RENDER_SCENE:
