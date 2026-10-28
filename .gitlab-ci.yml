@@ -72,6 +72,9 @@ pre-commit:
     RUFF_OUTPUT_FILE: .gitlab-code-quality-report.json
     RUFF_OUTPUT_FORMAT: gitlab
   before_script:
+    # pre-commit requires a git executable, which is not present in the uv slim image.
+    - apt-get update && apt-get install -y --no-install-recommends git
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - uv sync --locked
   script:
     - uv run pre-commit run --all-files --show-diff-on-failure
