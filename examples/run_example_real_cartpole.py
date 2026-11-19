@@ -38,17 +38,17 @@ if __name__ == "__main__":
     for _ in range(NUM_EPISODES):
         observations, actions, rewards, infos = [], [], [], []
         rewards_from_models = []
-        terminated = False
+        terminated = truncated = False
         obs, info = env.reset()
         model_input_buffer = info["model_input_buffer"]
         t_start = time.time()
         step_count = 0
-        while not terminated:
+        while not (terminated or truncated):
             policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
             action = policy_model([policy_input])[0]
             # action = np.array([0.5], dtype=np.float32)  # for testing purpose only
             # action = env.action_space.sample()  # for testing purpose only
-            obs, reward, terminated, _, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             observations.append(obs)
             actions.append(action)
             rewards.append(reward)

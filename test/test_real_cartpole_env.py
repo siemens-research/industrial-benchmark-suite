@@ -6,6 +6,7 @@ SPDX-License-Identifier: MIT
 """
 
 import numpy as np
+import pytest
 import tensorflow as tf
 from gymnasium.envs.registration import make
 
@@ -29,14 +30,14 @@ def test_env_fixed_init_with_policy():
 
     observations, actions, rewards, infos = [], [], [], []
     rewards_from_models = []
-    terminated = False
+    terminated = truncated = False
     obs, info = env.reset()
     model_input_buffer = info["model_input_buffer"]
     step_count = 0
-    while not terminated:
+    while not (terminated or truncated):
         policy_input = np.hstack(model_input_buffer[-POLICY_BUFFER_SIZE:])
         action = policy_model([policy_input])[0]
-        obs, reward, terminated, _, info = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
         observations.append(obs)
         actions.append(action)
         rewards.append(reward)
@@ -53,7 +54,7 @@ def test_env_from_data_init():
     config = {**DEFAULT_CONFIG_MLP}
     config.update(
         {
-            "max_episode_steps": 10,
+            "max_episode_length": 10,
             "init_method": "from_data",
         }
     )
@@ -61,12 +62,12 @@ def test_env_from_data_init():
 
     observations, actions, rewards, infos = [], [], [], []
     rewards_from_models = []
-    terminated = False
+    terminated = truncated = False
     obs, _ = env.reset()
     step_count = 0
-    while not terminated:
+    while not (terminated or truncated):
         action = np.array([0.1], dtype=np.float32)  # for testing purpose only
-        obs, reward, terminated, _, info = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
         observations.append(obs)
         actions.append(action)
         rewards.append(reward)
@@ -74,4 +75,28 @@ def test_env_from_data_init():
         infos.append(info)
         step_count += 1
 
+    assert step_count <= 10, "max_episode_length was not applied"
     assert np.sum(rewards) < 0.0
+
+
+def test_episode_end_is_truncated_not_terminated():
+    """Test that step limit / leaving the position limits is reported as truncated, never as terminated."""
+    config = {**DEFAULT_CONFIG_MLP}
+    config.update({"max_episode_length": 5, "init_method": "fixed"})
+    env = RealCartPoleEnv(config)
+    env.reset()
+
+    for step in range(1, 6):
+        _, _, terminated, truncated, _ = env.step(np.array([0.0], dtype=np.float32))
+        assert terminated is False
+        if truncated:
+            break
+    assert truncated
+    assert step <= 5
+
+
+def test_max_episode_steps_config_key_is_rejected():
+    """Test that the gym-style key 'max_episode_steps' is rejected instead of being silently ignored."""
+    config = {**DEFAULT_CONFIG_MLP, "max_episode_steps": 10}
+    with pytest.raises(ValueError, match="max_episode_length"):
+        RealCartPoleEnv(config)

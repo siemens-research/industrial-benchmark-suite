@@ -113,7 +113,7 @@ class FourTankEnv(gym.Env):
 
     ## Episode End
 
-    Depending on the config field 'max_episode_steps', the episode is either terminated when the
+    Depending on the config field 'max_episode_length', the episode is either truncated when the
     maximum step limit is reached (default: 100) or is run infinitely (None).
     """
 
@@ -194,6 +194,10 @@ class FourTankEnv(gym.Env):
         if env_config is not None:
             assert isinstance(env_config, dict), "env_config must be a dict"
             self.config.update(env_config)
+        if "max_episode_steps" in self.config:
+            raise ValueError(
+                "Unknown config key 'max_episode_steps', use 'max_episode_length' to set the episode step limit."
+            )
 
         model_dirs = [
             resolve_path(Path(self.config["tf_models_dir"], model_name), __file__)
@@ -215,7 +219,7 @@ class FourTankEnv(gym.Env):
         self.current_objectives = []
 
         self.state = None
-        self.max_episode_steps = self.config.get("max_episode_length", None)
+        self.max_episode_length = self.config.get("max_episode_length", None)
         self.step_count = 0
         self.reset_count = 0
 
@@ -330,7 +334,7 @@ class FourTankEnv(gym.Env):
             action: control action vector of shape (3, ) containing floating point action signal
 
         Returns:
-            observation, reward, terminated, done, info: tuple of signals describing the next
+            observation, reward, terminated, truncated, info: tuple of signals describing the next
             observable state of the environment.
         """
         # Build flattened input vector from current state buffer to be used as model input
@@ -382,17 +386,19 @@ class FourTankEnv(gym.Env):
 
         self.step_count += 1
 
-        terminated = (
-            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_steps
-            if self.max_episode_steps is not None
+        # There is no well-defined terminal state in this benchmark, hence the episode is only
+        # truncated once the step limit is exceeded or the state leaves the observation space limits.
+        truncated = (
+            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_length
+            if self.max_episode_length is not None
             else False
         )
 
         return (
             self.state,
             reward,
-            terminated,
             False,
+            truncated,
             {
                 "model_input_buffer": list(self._model_input_buffer),
                 "reward_components": reward_components,

@@ -53,7 +53,7 @@ At each `reset()`, the IDS core is re-initialised with `setpoint=p`, velocity/ga
 
 ### Episode End
 
-Episodes terminate after `reset_after_timesteps` steps (default: 1000).
+Episodes are truncated (`truncated=True`, `terminated=False`) after `reset_after_timesteps` steps (default: 1000).
 
 ## References
 

@@ -421,7 +421,7 @@ class IBGym(gym.Env):
         self.delta_reward: float = 0.0
         self.smoothed_reward: float = 0.0
         self.env_steps: int = 0
-        self.terminated: bool = False
+        self.truncated: bool = False
         self.last_action: Any = None
         self.observation: Any = None
 
@@ -454,7 +454,7 @@ class IBGym(gym.Env):
         self,
         action: Any,
     ) -> tuple[NDArray[np.float64], float, bool, bool, dict[str, Any]]:
-        if self.terminated:
+        if self.truncated:
             self.reset()
 
         self.last_action = action
@@ -472,9 +472,8 @@ class IBGym(gym.Env):
         self.smoothed_reward = 0.9 * self.smoothed_reward + 0.1 * self.reward
 
         self.env_steps += 1
-        truncated = False
         if self.env_steps >= self.reset_after_timesteps:
-            self.terminated = True
+            self.truncated = True
 
         if self.reward_function == "classic":
             return_reward = self.reward
@@ -484,7 +483,7 @@ class IBGym(gym.Env):
             raise ValueError('reward_function must be "classic" or "delta"')
 
         self.info = self._markovian_state()
-        return return_observation, return_reward, self.terminated, truncated, self.info
+        return return_observation, return_reward, False, self.truncated, self.info
 
     def reset(
         self,
@@ -507,7 +506,7 @@ class IBGym(gym.Env):
         self.delta_reward = 0.0
         self.smoothed_reward = self.reward
         self.env_steps = 0
-        self.terminated = False
+        self.truncated = False
 
         return return_observation, self.info
 

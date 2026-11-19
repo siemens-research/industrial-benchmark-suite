@@ -26,12 +26,12 @@ if __name__ == "__main__":
 
     for _ in range(NUM_EPISODES):
         observations, actions, rewards = [], [], []
-        terminated = False
+        terminated = truncated = False
         obs, info = env.reset()
         step_count = 0
-        while not terminated:
+        while not (terminated or truncated):
             action = env.action_space.sample()
-            obs, reward, terminated, _, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             observations.append(obs)
             actions.append(action)
             rewards.append(reward)
