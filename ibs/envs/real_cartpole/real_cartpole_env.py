@@ -116,8 +116,8 @@ class RealCartPoleEnv(gym.Env):
 
     The maximum achievable reward is 0 (if all three criteria are perfectly met).
     Any deviation from the individual targets result in a negative reward signal.
-    If the epsisode is truncated before the maximum steps number is reached,
-    a negative reward of -1.*(steps_missed) is returned, where steps_missed correpsonds
+    If the episode is terminated before the maximum steps number is reached,
+    a negative reward of -1.*(steps_missed) is returned, where steps_missed corresponds
     to the remaining number of steps.
 
     ## Starting State
@@ -127,9 +127,11 @@ class RealCartPoleEnv(gym.Env):
 
     ## Episode End
 
-    Depending on the config field 'max_episode_length', the episode is either truncated when the
-    maximum step limit is reached or is run infinitely (default). Also, the episode is truncated
-    if the cart moves outside the allowed position interval between 0 and 600mm.
+    Depending on the config field 'max_episode_length', the episode is either truncated
+    (`truncated=True`) when the maximum step limit is reached (default: 500) or is run infinitely
+    (None). Independent of the step limit, the episode is terminated (`terminated=True`) as a failure
+    if the state leaves the observation space, e.g. if the cart moves outside the allowed position
+    interval between 0 and 600mm.
     """
 
     # Static class properties used by render() function
@@ -272,20 +274,17 @@ class RealCartPoleEnv(gym.Env):
 
         self.step_count += 1
 
-        # There is no well-defined terminal state in this benchmark, hence the episode is only
-        # truncated once the step limit is exceeded or the state leaves the observation space limits.
-        truncated = (
-            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_length
-            if self.max_episode_length is not None
-            else False
-        )
-        if truncated:
+        # Leaving the allowed state range (e.g. cart hitting the track limits) is a failure and hence a
+        # terminal state, whereas reaching the step limit only truncates the episode.
+        terminated = not self.observation_space.contains(self.state)
+        truncated = self.max_episode_length is not None and self.step_count >= self.max_episode_length
+        if terminated and self.max_episode_length is not None:
             reward += -1.0 * np.clip((self.max_episode_length - self.step_count), 0, None)
 
         return (
             self.state,
             reward,
-            False,
+            terminated,
             truncated,
             {"mean_reward_from_models": mean_reward_from_models, "model_input_buffer": list(self._model_input_buffer)},
         )
