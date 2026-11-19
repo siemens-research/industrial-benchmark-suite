@@ -99,6 +99,7 @@ celerybeat-schedule
 *.sage.py
 
 # Environments
+.claude
 .env
 .venv
 env/
@@ -150,6 +151,8 @@ results
 !/resources/envs/**/config/ccbench_default.yaml
 !/resources/envs/**/config/ccbench_v1.yaml
 !/resources/envs/**/config/*.templ.yaml
+
+/resources/envs/**/*.tflite
 
 # /src/__init__.py
 # /src/siemens/__init__.py

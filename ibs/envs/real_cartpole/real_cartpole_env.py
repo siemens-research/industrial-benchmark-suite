@@ -1,4 +1,4 @@
-"""Gymnasium environment of the CEBIT 2018 real cartpole system.
+"""Gymnasium environment of the Siemens real cartpole system.
 
 The dynamics of the real cartpole system, originally designed and built for the Cebit 2018,
 are simulated by running pre-trained Tensorflow surrogate models.

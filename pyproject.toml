@@ -4,7 +4,7 @@
 
 [project]
 name = "industrial-benchmark-suite"
-version = "0.1.0"
+version = "1.0"
 description = "Collection of industrial benchmark environments."
 authors = [
     { name = "Marc Weber", email = "marc-weber@siemens.com" },
@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://code.siemens.com/ai/industrial-benchmark-suite"
-repository = "https://code.siemens.com/ai/industrial-benchmark-suite"
+homepage = "https://github.com/siemens/industrial-benchmark-suite"
+repository = "https://github.com/siemens/industrial-benchmark-suite"
 
 [project.scripts]
 gen_industry_benchmarks = "ibs.__main__:app"
