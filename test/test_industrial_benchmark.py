@@ -111,3 +111,20 @@ def test_include_past_observation():
     assert obs.shape == (6 * n_past,)
     state, reward, terminated, truncated, info = env.step(env.action_space.sample())
     assert state.shape == (6 * n_past,)
+
+
+def test_episode_end_is_truncated_not_terminated():
+    """Test that reaching reset_after_timesteps is reported as truncated and triggers an auto-reset."""
+    env = IBGym(50, reset_after_timesteps=5)
+    env.reset()
+
+    for step in range(1, 6):
+        _, _, terminated, truncated, _ = env.step(env.action_space.sample())
+        assert terminated is False
+        assert truncated == (step == 5)
+
+    # Next step auto-resets the environment and starts a new episode
+    _, _, terminated, truncated, _ = env.step(env.action_space.sample())
+    assert terminated is False
+    assert truncated is False
+    assert env.env_steps == 1

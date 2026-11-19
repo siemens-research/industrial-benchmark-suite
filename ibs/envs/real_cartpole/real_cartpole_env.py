@@ -116,7 +116,7 @@ class RealCartPoleEnv(gym.Env):
 
     The maximum achievable reward is 0 (if all three criteria are perfectly met).
     Any deviation from the individual targets result in a negative reward signal.
-    If the epsisode is terminated before the maximum steps number is reached,
+    If the epsisode is truncated before the maximum steps number is reached,
     a negative reward of -1.*(steps_missed) is returned, where steps_missed correpsonds
     to the remaining number of steps.
 
@@ -127,8 +127,8 @@ class RealCartPoleEnv(gym.Env):
 
     ## Episode End
 
-    Depending on the config field 'max_episode_steps', the episode is either terminated when the
-    maximum step limit is reached or is run infinitely (default). Also, the episode is terminated
+    Depending on the config field 'max_episode_length', the episode is either truncated when the
+    maximum step limit is reached or is run infinitely (default). Also, the episode is truncated
     if the cart moves outside the allowed position interval between 0 and 600mm.
     """
 
@@ -155,6 +155,10 @@ class RealCartPoleEnv(gym.Env):
         if env_config is not None:
             assert isinstance(env_config, dict), "env_config must be a dict"
             self.config.update(env_config)
+        if "max_episode_steps" in self.config:
+            raise ValueError(
+                "Unknown config key 'max_episode_steps', use 'max_episode_length' to set the episode step limit."
+            )
 
         model_dirs = [
             resolve_path(Path(self.config["tf_models_dir"], model_name), __file__)
@@ -196,7 +200,7 @@ class RealCartPoleEnv(gym.Env):
         self._model_input_buffer = deque([], maxlen=self.config["observation_buffer_size"])
 
         self.state = None
-        self.max_episode_steps = self.config.get("max_episode_length", None)
+        self.max_episode_length = self.config.get("max_episode_length", None)
         self.step_count = 0
         self.reset_count = 0
 
@@ -220,7 +224,7 @@ class RealCartPoleEnv(gym.Env):
             in [-1, 1]
 
         Returns:
-            observation, reward, terminated, done, info: tuple of signals describing the next
+            observation, reward, terminated, truncated, info: tuple of signals describing the next
             observable state of the environment.
         """
         # Build flattened input vector from current state buffer to be used as model input
@@ -268,19 +272,21 @@ class RealCartPoleEnv(gym.Env):
 
         self.step_count += 1
 
-        terminated = (
-            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_steps
-            if self.max_episode_steps is not None
+        # There is no well-defined terminal state in this benchmark, hence the episode is only
+        # truncated once the step limit is exceeded or the state leaves the observation space limits.
+        truncated = (
+            not self.observation_space.contains(self.state) or self.step_count >= self.max_episode_length
+            if self.max_episode_length is not None
             else False
         )
-        if terminated:
-            reward += -1.0 * np.clip((self.max_episode_steps - self.step_count), 0, None)
+        if truncated:
+            reward += -1.0 * np.clip((self.max_episode_length - self.step_count), 0, None)
 
         return (
             self.state,
             reward,
-            terminated,
             False,
+            truncated,
             {"mean_reward_from_models": mean_reward_from_models, "model_input_buffer": list(self._model_input_buffer)},
         )
 

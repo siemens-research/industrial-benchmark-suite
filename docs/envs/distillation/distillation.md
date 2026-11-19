@@ -123,5 +123,5 @@ of random initial states ("from_data") or always using the same initial sample p
 
 ### Episode End
 
-Depending on the config field "max_episode_steps", the episode is either terminated when the
+Depending on the config field "max_episode_length", the episode is either truncated when the
 maximum step limit is reached (default: 100) or is run infinitely (None).
