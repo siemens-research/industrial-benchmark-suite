@@ -1,6 +1,6 @@
 # Real Cartpole Benchmark
 
-![real_cartpole_banner.PNG](docs/envs/real_cartpole/real_cartpole_banner.PNG)
+![real_cartpole_banner.PNG](real_cartpole_banner.PNG)
 
 ## Gym(nasium) Environment for the Siemens Hardware Cartpole
 
