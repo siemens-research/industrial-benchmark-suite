@@ -1,0 +1,35 @@
+[changelog]
+header = """
+# Changelog
+
+Notable changes are generated from conventional commit messages for each tagged release.
+
+"""
+body = """
+{% if version %}\
+## {{ version }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | upper_first }}
+{% endfor %}
+{% endfor %}
+{% endif %}\
+"""
+trim = true
+format = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+commit_parsers = [
+    { message = "^docs\\(changelog\\)!?:", skip = true },
+    { message = "^feat(\\([^\\n)]*\\))?!?:", group = "Features" },
+    { message = "^fix(\\([^\\n)]*\\))?!?:", group = "Fixes" },
+    { message = "^Initial commit$", group = "Other changes" },
+    { message = "^(build|chore|ci|docs|perf|refactor|revert|style|test)(\\([^\\n)]*\\))?!?:", group = "Other changes" },
+    { message = ".*", skip = true },
+]
+filter_commits = false
+tag_pattern = "^v[0-9].*"
+sort_commits = "oldest"

@@ -2,9 +2,9 @@
 
 ![real_cartpole_banner.PNG](docs/envs/real_cartpole/real_cartpole_banner.PNG)
 
-## Gym(nasium) Environment for the Siemens Cebit 2018 Hardware Cartpole
+## Gym(nasium) Environment for the Siemens Hardware Cartpole
 
-The environment provides a simulation of the Cebit 2018 cartpole system
+The environment provides a simulation of the Siemens hardware cartpole system
 currently located at the Siemens Technology site in Munich/Neuperlach ("Real Cartpole")
 based on pre-trained dynamic models. It includes a realistic representation
 ("digital twin") of the actual physical system, including friction and solid body

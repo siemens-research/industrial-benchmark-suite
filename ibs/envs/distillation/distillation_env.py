@@ -10,8 +10,6 @@ SPDX-License-Identifier: MIT
 
 Author:
     Marc Weber (marc-weber@siemens.com)
-
-Copyright (C) 2026 Siemens AG.
 """
 
 from collections import deque

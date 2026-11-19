@@ -2,7 +2,6 @@
 
 The Industrial Benchmark Suite (IBS) is a collection of simulated environments designed to facilitate research and development in the field of reinforcement learning (RL) for industrial control systems. The suite includes a variety of environments that mimic real-world industrial processes, allowing researchers to test, evaluate and improve RL algorithms in settings which pose special challenges regarding system identification, task variability and noise conditions.
 
-
 ## Environments
 
 The suite currently includes the following environments, which are described in more detail in the corresponding documentation pages:
@@ -23,7 +22,7 @@ In addition to the environments, the IBS also provides the original datasets of 
 Install the package directly from the repository using pip:
 
 ```bash
-pip install git+https://code.siemens.com/ai/industrial-benchmark-suite.git
+pip install git+https://github.com/siemens/industrial-benchmark-suite.git
 ```
 
 Or, if you have cloned the repository locally:
@@ -33,6 +32,8 @@ pip install .
 ```
 
 ## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and changelog conventions.
 
 To set up a development environment, first clone the repository and then install all dependencies (including the dev group) using **uv**:
 
@@ -68,6 +69,13 @@ gen_industry_benchmarks ccbench --config-file resources/envs/ccbench/config/ccbe
 
 The code in this repository is licensed under the MIT License. See the [LICENSE](LICENSE.txt) file for details.
 
+SPDX-License-Identifier: MIT
+
+## Copyright
+
+The Industrial Benchmark Suite is developed and maintained by Siemens AG.
+
+(C) Copyright Siemens AG 2026
 
 ## Main contributors
 
@@ -82,7 +90,7 @@ publication is available, please cite the software project directly. For example
 
 > Weber, M., Schoener, H., & Hein, D. (2026). *Industrial Benchmark Suite (IBS): A collection of industrial
 > benchmark environments for reinforcement learning* (Version 0.1.0) [Computer software].
-> Siemens AG. https://code.siemens.com/ai/industrial-benchmark-suite
+> Siemens AG. https://github.com/siemens/industrial-benchmark-suite
 
 Or, using BibTeX:
 
@@ -94,7 +102,7 @@ Or, using BibTeX:
   year    = {2026},
   version = {0.1.0},
   publisher = {Siemens AG},
-  url     = {https://code.siemens.com/ai/industrial-benchmark-suite}
+  url     = {https://github.com/siemens/industrial-benchmark-suite}
 }
 ```
 
