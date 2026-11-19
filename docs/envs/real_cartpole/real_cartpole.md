@@ -46,8 +46,8 @@ reward = 0.01 * (
 
 The maximum achievable reward is 0 (if all three criteria are perfectly met).
 Any deviation from the individual targets result in a negative reward signal.
-If the epsisode is truncated before the maximum steps number is reached,
-a negative reward of -1.*(steps_missed) is returned, where steps_missed correpsonds
+If the episode is terminated before the maximum steps number is reached,
+a negative reward of -1.*(steps_missed) is returned, where steps_missed corresponds
 to the remaining number of steps.
 
 ### Starting State
@@ -57,6 +57,8 @@ sample or set by a 'fixed' sample (as defined by the 'initial_observation' field
 
 ### Episode End
 
-Depending on the config field 'max_episode_length', the episode is either truncated when the
-maximum step limit is reached or is run infinitely (default). Also, the episode is truncated
-if the cart moves outside the allowed position interval between 0 and 600mm.
+Depending on the config field 'max_episode_length', the episode is either truncated
+(`truncated=True`) when the maximum step limit is reached (default: 500) or is run infinitely
+(None). Independent of the step limit, the episode is terminated (`terminated=True`) as a failure
+if the state leaves the observation space, e.g. if the cart moves outside the allowed position
+interval between 0 and 600mm.

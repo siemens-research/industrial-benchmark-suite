@@ -79,20 +79,34 @@ def test_env_from_data_init():
     assert np.sum(rewards) < 0.0
 
 
-def test_episode_end_is_truncated_not_terminated():
-    """Test that step limit / leaving the position limits is reported as truncated, never as terminated."""
+def test_step_limit_is_truncated_not_terminated():
+    """Test that reaching the step limit (state within limits) is reported as truncated, not terminated."""
     config = {**DEFAULT_CONFIG_MLP}
     config.update({"max_episode_length": 5, "init_method": "fixed"})
     env = RealCartPoleEnv(config)
     env.reset()
+    # keep the state within the observation space to isolate the step limit
+    env.observation_space.contains = lambda _: True
 
     for step in range(1, 6):
         _, _, terminated, truncated, _ = env.step(np.array([0.0], dtype=np.float32))
         assert terminated is False
-        if truncated:
-            break
-    assert truncated
-    assert step <= 5
+        assert truncated is (step == 5)
+
+
+def test_leaving_observation_space_is_terminated_with_penalty():
+    """Test that leaving the allowed state range is a failure: terminated (not truncated) with step penalty."""
+    config = {**DEFAULT_CONFIG_MLP}
+    config.update({"max_episode_length": 5, "init_method": "fixed"})
+    env = RealCartPoleEnv(config)
+    env.reset()
+    env.observation_space.contains = lambda _: False
+
+    _, reward, terminated, truncated, _ = env.step(np.array([0.0], dtype=np.float32))
+    assert terminated is True
+    assert truncated is False
+    # the base reward is in [-0.69, 0], the penalty for the 4 missed steps is -4
+    assert -4.69 <= reward <= -4.0
 
 
 def test_max_episode_steps_config_key_is_rejected():
